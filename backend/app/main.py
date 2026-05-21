@@ -62,6 +62,30 @@ def get_categories(db: Session = Depends(get_db)):
         })
     return result
 
+@app.get("/api/exams/{exam_id}", response_model=Dict[str, Any])
+def get_exam(exam_id: int, db: Session = Depends(get_db)):
+    exam = db.query(Exam).filter_by(id=exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    topics = db.query(Topic).filter_by(exam_id=exam.id, parent_topic_id=None).all()
+    topic_data = []
+    for topic in topics:
+        subtopics = db.query(Topic).filter_by(parent_topic_id=topic.id).all()
+        topic_data.append({
+            "id": topic.id,
+            "name": topic.name,
+            "subtopics": [{"id": st.id, "name": st.name} for st in subtopics]
+        })
+
+    return {
+        "id": exam.id,
+        "category_id": exam.category_id,
+        "name": exam.name,
+        "full_name": exam.full_name,
+        "topics": topic_data
+    }
+
 @app.get("/api/exams", response_model=List[Dict[str, Any]])
 def get_exams(category_id: int = None, db: Session = Depends(get_db)):
     query = db.query(Exam)
