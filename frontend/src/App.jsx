@@ -85,10 +85,13 @@ function parseOptions(text) {
 
 // ============= Helper to generate Fallback study roadmap =============
 function getFallbackPlan(days) {
-  const blocks = Math.min(4, days);
+  const parsedDays = parseInt(days) || 30;
+  const boundedDays = Math.max(7, Math.min(365, parsedDays));
+
+  const blocks = Math.min(4, boundedDays);
   if (blocks <= 0) return [];
-  const daysPerBlock = Math.floor(days / blocks);
-  const extraDays = days % blocks;
+  const daysPerBlock = Math.floor(boundedDays / blocks);
+  const extraDays = boundedDays % blocks;
   const topics = [
     { name: 'Discrete Mathematics', tasks: ['Master Mathematical Logic & Set Theory basics', 'Solve Graph Theory & Combinatorics problems'] },
     { name: 'Computer Organization & Architecture', tasks: ['Revise Cache Memory hierarchy & mapping', 'Practice Instruction Pipelining numeric problems'] },
@@ -178,7 +181,7 @@ function App() {
   const [selectedTopicFilter, setSelectedTopicFilter] = useState('');
 
   // Study plan and trend states
-  const [studyPlanDays, setStudyPlanDays] = useState(30);
+  const [studyPlanDays, setStudyPlanDays] = useState('30');
   const [studyPlan, setStudyPlan] = useState([]);
   const [studyPlanWeaknesses, setStudyPlanWeaknesses] = useState('');
   const [selectedHeatmapTopic, setSelectedHeatmapTopic] = useState(null);
@@ -1048,7 +1051,9 @@ function App() {
                     <input 
                       type="number" 
                       value={studyPlanDays} 
-                      onChange={(e) => setStudyPlanDays(parseInt(e.target.value) || 0)}
+                      onChange={(e) => setStudyPlanDays(e.target.value)}
+                      min="7"
+                      max="365"
                       style={{ padding: '8px', borderRadius: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255, 255, 255, 0.1)', color: 'white', width: '120px' }} 
                     />
                   </div>
