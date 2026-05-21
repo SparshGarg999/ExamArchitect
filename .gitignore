@@ -1,0 +1,77 @@
+# ===================== Python =====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+
+# Virtual environments
+backend/venv/
+backend/.venv/
+venv/
+.venv/
+
+# ===================== Node.js =====================
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ===================== Database =====================
+*.db
+*.sqlite
+*.sqlite3
+backend/exam_architect.db
+backend/gate_db.sqlite
+exam_architect.db
+
+# ===================== Secrets & Env =====================
+.env
+backend/.env
+!backend/.env.example
+
+# ===================== IDE / Editor =====================
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*.swo
+*~
+
+# ===================== OS =====================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===================== Logs =====================
+logs/
+*.log
+
+# ===================== Intermediate Data =====================
+backend/data/
+frontend/dist/
+
+# ===================== Misc =====================
+*.local
+*.bak
+*.tmp
+
+# Scratch / debug scripts at root
+check_*.py
+test_parse.py
+questions_*_dump.txt
+parsed_*_questions.txt
