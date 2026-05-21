@@ -1172,6 +1172,10 @@
 
 
 
+.heatmap-cell {
+  transition: all 0.3s ease;
+}
+
 /* Critical heatmap cell styling */
 .heatmap-cell-critical {
   border: 1.5px solid rgba(239, 68, 68, 0.9);

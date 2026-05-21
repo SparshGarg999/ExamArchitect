@@ -506,7 +506,7 @@ function App() {
     
     let bgIntensity = 'rgba(255,255,255,0.02)';
     let textColor = 'var(--text-secondary)';
-    let className = '';
+    let className = 'heatmap-cell';
     
     if (marks > 0) {
       if (marks <= 3) {
