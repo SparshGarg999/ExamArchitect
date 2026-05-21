@@ -1,28 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  Cpu, 
-  Activity, 
-  BookOpen, 
-  BarChart3, 
-  Layers, 
-  Settings, 
-  ArrowRight, 
-  ChevronLeft, 
-  ChevronRight,
-  Calendar, 
-  ListTodo,
-  TrendingUp,
-  AlertTriangle,
-  Flame,
-  Search,
-  CheckCircle,
-  HelpCircle,
-  ShieldAlert,
-  Image,
-  Eye,
-  EyeOff,
-  RefreshCw
-} from 'lucide-react';
+import { BookOpen, BarChart2, Calendar, Database, Upload, Target, CheckCircle, FileText, Award, Search, ChevronRight, ChevronDown, AlertCircle, BookMarked, BookOpenCheck, X } from 'lucide-react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -35,6 +12,7 @@ import {
   Legend,
 } from 'chart.js';
 import './App.css';
+import QuestionCard from './components/QuestionCard';
 import AdminPanel from './components/AdminPanel';
 
 ChartJS.register(
@@ -50,44 +28,16 @@ ChartJS.register(
 const API_BASE = 'http://localhost:8000';
 
 // ============= Helper to parse MCQ Options =============
-function parseOptions(text) {
-  if (!text) return null;
-  
-  // Regex to match options like (A) ... (B) ...
-  const mcqPattern = /(?:\(|\s|^)([A-D])\)(?:\s+|:)([\s\S]*?)(?=\s*(?:\(|^[A-D]\)|[A-D]\s*[\.):]|$))/g;
-  const matches = [...text.matchAll(mcqPattern)];
-  if (matches.length > 0) {
-    const options = matches.map(m => ({
-      label: m[1],
-      text: m[2].trim()
-    }));
-    const firstOptionIdx = text.search(/(?:\(|\s|^)[A-D]\)(?:\s+|:)/);
-    const cleanText = firstOptionIdx !== -1 ? text.substring(0, firstOptionIdx).trim() : text;
-    return { cleanText, options };
-  }
-
-  // Regex to match options like A. ... B. ...
-  const dotPattern = /(?:\s|^)([A-D])\.(?:\s+|:)([\s\S]*?)(?=\s*(?:^[A-D]\.|[A-D]\s*[\.):]|$))/g;
-  const matchesDot = [...text.matchAll(dotPattern)];
-  if (matchesDot.length > 0) {
-    const options = matchesDot.map(m => ({
-      label: m[1],
-      text: m[2].trim()
-    }));
-    const firstOptionIdx = text.search(/(?:\s|^)[A-D]\.(?:\s+|:)/);
-    const cleanText = firstOptionIdx !== -1 ? text.substring(0, firstOptionIdx).trim() : text;
-    return { cleanText, options };
-  }
-
-  return null;
-}
 
 // ============= Helper to generate Fallback study roadmap =============
 function getFallbackPlan(days) {
-  const blocks = Math.min(4, days);
+  const parsedDays = parseInt(days) || 30;
+  const boundedDays = Math.max(7, Math.min(365, parsedDays));
+
+  const blocks = Math.min(4, boundedDays);
   if (blocks <= 0) return [];
-  const daysPerBlock = Math.floor(days / blocks);
-  const extraDays = days % blocks;
+  const daysPerBlock = Math.floor(boundedDays / blocks);
+  const extraDays = boundedDays % blocks;
   const topics = [
     { name: 'Discrete Mathematics', tasks: ['Master Mathematical Logic & Set Theory basics', 'Solve Graph Theory & Combinatorics problems'] },
     { name: 'Computer Organization & Architecture', tasks: ['Revise Cache Memory hierarchy & mapping', 'Practice Instruction Pipelining numeric problems'] },
@@ -174,10 +124,9 @@ function App() {
   const [papers, setPapers] = useState([]);
   const [selectedPaper, setSelectedPaper] = useState(null); // null means "All Papers"
   const [questions, setQuestions] = useState([]);
-  const [selectedTopicFilter, setSelectedTopicFilter] = useState('');
 
   // Study plan and trend states
-  const [studyPlanDays, setStudyPlanDays] = useState(30);
+  const [studyPlanDays, setStudyPlanDays] = useState('30');
   const [studyPlan, setStudyPlan] = useState([]);
   const [studyPlanWeaknesses, setStudyPlanWeaknesses] = useState('');
   const [selectedHeatmapTopic, setSelectedHeatmapTopic] = useState(null);
@@ -190,12 +139,20 @@ function App() {
   const [questionSearch, setQuestionSearch] = useState('');
   const [questionSubjectFilter, setQuestionSubjectFilter] = useState('');
   const [examTopics, setExamTopics] = useState([]);
+  const [weaknessExpandedSubjects, setWeaknessExpandedSubjects] = useState({});
+
+  const toggleWeaknessSubjectExpansion = (subjectId) => {
+    setWeaknessExpandedSubjects(prev => ({
+      ...prev,
+      [subjectId]: !prev[subjectId]
+    }));
+  };
 
   const topicDetailsRef = useRef(null);
 
   useEffect(() => {
     if (selectedHeatmapTopic && topicDetailsRef.current) {
-      topicDetailsRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      topicDetailsRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [selectedHeatmapTopic]);
 
@@ -299,8 +256,10 @@ function App() {
   // Weakness Toggle Handler
   const handleToggleWeakness = (topicName) => {
     let list = studyPlanWeaknesses.split(',').map(s => s.trim()).filter(Boolean);
-    if (list.includes(topicName)) {
-      list = list.filter(item => item !== topicName);
+    const lowerList = list.map(s => s.toLowerCase());
+
+    if (lowerList.includes(topicName.toLowerCase())) {
+      list = list.filter(item => item.toLowerCase() !== topicName.toLowerCase());
     } else {
       list.push(topicName);
     }
@@ -312,6 +271,7 @@ function App() {
     const params = new URLSearchParams();
     if (questionSearch.trim()) params.set('search', questionSearch.trim());
     if (questionSubjectFilter) params.set('subject_id', questionSubjectFilter);
+    if (selectedExam) params.set('exam_id', selectedExam.id);
     const queryStr = params.toString() ? `?${params.toString()}` : '';
 
     let url = '';
@@ -325,7 +285,7 @@ function App() {
       .then(res => res.json())
       .then(data => setQuestions(data))
       .catch(err => console.error(err));
-  }, [selectedPaper, questionSubjectFilter, questionSearch]);
+  }, [selectedExam, selectedPaper, questionSubjectFilter, questionSearch]);
 
   // Trigger fetch when paper or subject filters change
   useEffect(() => {
@@ -444,14 +404,18 @@ function App() {
     },
     scales: {
       x: {
+        border: {
+          color: 'rgba(255, 255, 255, 0.1)'
+        },
         title: {
           display: true,
           text: 'Year of Exam',
           color: '#cbd5e1',
-          font: { family: 'Outfit', size: 10, weight: 'bold' }
+          font: { family: 'Outfit', size: 10, weight: 'bold' },
+          padding: { top: 10 }
         },
         grid: {
-          color: 'rgba(255, 255, 255, 0.03)',
+          display: false,
         },
         ticks: {
           color: '#94a3b8',
@@ -459,14 +423,18 @@ function App() {
         }
       },
       y: {
+        border: {
+          color: 'rgba(255, 255, 255, 0.1)'
+        },
         title: {
           display: true,
           text: 'Marks Weightage',
           color: '#cbd5e1',
-          font: { family: 'Outfit', size: 10, weight: 'bold' }
+          font: { family: 'Outfit', size: 10, weight: 'bold' },
+          padding: { bottom: 10 }
         },
         grid: {
-          color: 'rgba(255, 255, 255, 0.03)',
+          color: 'rgba(255, 255, 255, 0.09)',
         },
         ticks: {
           color: '#94a3b8',
@@ -506,42 +474,37 @@ function App() {
     
     let bgIntensity = 'rgba(255,255,255,0.02)';
     let textColor = 'var(--text-secondary)';
-    let extraStyles = {};
+    let className = 'heatmap-cell';
     
     if (marks > 0) {
       if (marks <= 3) {
         // Low: Amber / yellow gradient
-        bgIntensity = `rgba(251, 191, 36, ${0.15 + (marks/3) * 0.25})`;
+        bgIntensity = `linear-gradient(135deg, rgba(251, 191, 36, ${0.15 + (marks/3) * 0.25}), rgba(217, 119, 6, ${0.15 + (marks/3) * 0.25}))`;
       } else if (marks <= 7) {
         // Medium: Orange gradient
-        bgIntensity = `rgba(249, 115, 22, ${0.4 + ((marks-3)/4) * 0.3})`;
+        bgIntensity = `linear-gradient(135deg, rgba(249, 115, 22, ${0.4 + ((marks-3)/4) * 0.3}), rgba(234, 88, 12, ${0.4 + ((marks-3)/4) * 0.3}))`;
         textColor = '#ffffff';
       } else {
         // Critical: Red/coral gradient
-        bgIntensity = `rgba(239, 68, 68, ${0.7 + ((marks-7)/9) * 0.25})`;
+        bgIntensity = `linear-gradient(135deg, rgba(239, 68, 68, ${0.7 + ((marks-7)/9) * 0.25}), rgba(185, 28, 28, ${0.7 + ((marks-7)/9) * 0.25}))`;
         textColor = '#ffffff';
-        extraStyles = {
-          border: '1.5px solid rgba(239, 68, 68, 0.9)',
-          textShadow: '0 0 3px rgba(239, 68, 68, 0.8)',
-          boxShadow: '0 0 8px rgba(239, 68, 68, 0.5)',
-          animation: 'pulseGlow 2s infinite alternate'
-        };
+        className = 'heatmap-cell-critical';
       }
     }
     
     return (
       <div 
-        key={key} 
+        key={key}
+        className={className}
         style={{ 
-          backgroundColor: bgIntensity, 
+          background: bgIntensity,
           color: textColor,
           padding: '6px 2px', 
           borderRadius: '4px', 
           fontWeight: 'bold', 
           textAlign: 'center',
           fontSize: '0.75rem',
-          border: '1px solid rgba(255,255,255,0.02)',
-          ...extraStyles
+          border: marks > 7 ? undefined : '1px solid rgba(255,255,255,0.02)'
         }}
       >
         {marks > 0 ? `${marks.toFixed(0)}m` : '0m'}
@@ -882,16 +845,25 @@ function App() {
 
                     <div className="topic-info-stats">
                       <div className="topic-info-stat-box">
-                        <span>Max Recorded Weight</span>
+                        <span>Total Marks</span>
                         <strong>
                           {(() => {
-                            const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.total_marks : y);
-                            return values.length > 0 ? `${Math.max(...values).toFixed(1)}m` : 'N/A';
+                            const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.total_marks : 0);
+                            return values.length > 0 ? `${values.reduce((a, b) => a + b, 0).toFixed(1)}m` : '0m';
                           })()}
                         </strong>
                       </div>
                       <div className="topic-info-stat-box">
-                        <span>Avg Difficulty Trend</span>
+                        <span>Question Count</span>
+                        <strong>
+                          {(() => {
+                            const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.question_count : 0);
+                            return values.length > 0 ? values.reduce((a, b) => a + b, 0) : 0;
+                          })()}
+                        </strong>
+                      </div>
+                      <div className="topic-info-stat-box">
+                        <span>Avg Difficulty</span>
                         <strong style={{ color: 'var(--accent-amber)' }}>
                           {(() => {
                             const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.avg_difficulty : 2).filter(Boolean);
@@ -1033,7 +1005,9 @@ function App() {
                     <input 
                       type="number" 
                       value={studyPlanDays} 
-                      onChange={(e) => setStudyPlanDays(parseInt(e.target.value) || 0)}
+                      onChange={(e) => setStudyPlanDays(e.target.value)}
+                      min="7"
+                      max="365"
                       style={{ padding: '8px', borderRadius: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255, 255, 255, 0.1)', color: 'white', width: '120px' }} 
                     />
                   </div>
@@ -1062,10 +1036,18 @@ function App() {
                     <span className="weakness-chips-label">Curated Subjects & Topics (Click to toggle):</span>
                     <div className="curated-weakness-hierarchy">
                       {examTopics.map(subject => {
-                        const isSubjectActive = studyPlanWeaknesses.split(',').map(s => s.trim()).includes(subject.name);
+                        const activeList = studyPlanWeaknesses.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+                        const isSubjectActive = activeList.includes(subject.name.toLowerCase());
                         return (
                           <div key={subject.id} className="subject-weakness-group">
-                            <div className="subject-title-chip-row">
+                            <div className="subject-title-chip-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button
+                                type="button"
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                onClick={() => toggleWeaknessSubjectExpansion(subject.id)}
+                              >
+                                {weaknessExpandedSubjects[subject.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
                               <button 
                                 className={`weakness-chip subject-chip ${isSubjectActive ? 'active' : ''}`}
                                 onClick={() => handleToggleWeakness(subject.name)}
@@ -1073,20 +1055,22 @@ function App() {
                                 {subject.name}
                               </button>
                             </div>
-                            <div className="subtopics-chip-row">
-                              {subject.subtopics && subject.subtopics.map(subtopic => {
-                                const isSubtopicActive = studyPlanWeaknesses.split(',').map(s => s.trim()).includes(subtopic.name);
-                                return (
-                                  <button 
-                                    key={subtopic.id} 
-                                    className={`weakness-chip subtopic-chip ${isSubtopicActive ? 'active' : ''}`}
-                                    onClick={() => handleToggleWeakness(subtopic.name)}
-                                  >
-                                    {subtopic.name}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            {weaknessExpandedSubjects[subject.id] && (
+                              <div className="subtopics-chip-row" style={{ marginTop: '8px', paddingLeft: '28px' }}>
+                                {subject.subtopics && subject.subtopics.map(subtopic => {
+                                  const isSubtopicActive = activeList.includes(subtopic.name.toLowerCase());
+                                  return (
+                                    <button
+                                      key={subtopic.id}
+                                      className={`weakness-chip subtopic-chip ${isSubtopicActive ? 'active' : ''}`}
+                                      onClick={() => handleToggleWeakness(subtopic.name)}
+                                    >
+                                      {subtopic.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -1196,68 +1180,9 @@ function App() {
                     </p>
                   </div>
                 ) : (
-                  questions.map(q => {
-                    const diffLabel = q.difficulty === 'H' ? 'Hard' : q.difficulty === 'M' ? 'Medium' : 'Easy';
-                    const parsed = parseOptions(q.question_text);
-                    const cleanText = parsed ? parsed.cleanText : q.question_text;
-                    const options = parsed ? parsed.options : [];
-
-                    return (
-                      <div key={q.id} className="question-card">
-                        {/* Card Header */}
-                        <div className="question-card-header">
-                          <div className="question-card-header-left">
-                            <span className="question-number-badge">Q.{q.question_number}</span>
-                            
-                            {/* Year Badge if showing All Papers */}
-                            {!selectedPaper && q.paper_year && (
-                              <span className="q-badge" style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                GATE CS {q.paper_year}
-                              </span>
-                            )}
-                            
-                            <div className="question-meta-badges">
-                              <span className="q-badge q-badge-type">{q.question_style}</span>
-                              <span className="q-badge q-badge-marks">{q.marks} {q.marks === 1 ? 'Mark' : 'Marks'}</span>
-                              <span className={`q-badge q-badge-difficulty-${q.difficulty}`}>{diffLabel}</span>
-                            </div>
-                          </div>
-                          {(q.parent_subject_name || q.topic_name) && (
-                            <span className="q-badge q-badge-topic">
-                              {q.parent_subject_name || q.topic_name}
-                              {q.parent_subject_name && q.topic_name && q.parent_subject_name !== q.topic_name && ` › ${q.topic_name}`}
-                            </span>
-                          )}
-                        </div>
-                        
-                        {/* Card Body */}
-                        <div className="question-card-body">
-                          <p className="question-text">{cleanText}</p>
-                          
-                          {/* MCQ/MSQ option choices rendering */}
-                          {options.length > 0 && (
-                            <div className="question-options-grid">
-                              {options.map((opt, oIdx) => (
-                                <div key={oIdx} className="question-option-card">
-                                  <span className="question-option-label">{opt.label}</span>
-                                  <span className="question-option-text">{opt.text}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {q.has_diagram && (
-                            <div className="question-diagram-placeholder">
-                              <Image size={20} />
-                              <span>This question contains a diagram or visual element</span>
-                            </div>
-                          )}
-                          
-                          <AnswerSpoiler answer={q.correct_answer} />
-                        </div>
-                      </div>
-                    );
-                  })
+                  questions.map(q => (
+                    <QuestionCard key={q.id} q={q} selectedPaper={selectedPaper} />
+                  ))
                 )}
               </div>
             </div>

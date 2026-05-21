@@ -924,7 +924,7 @@
   margin-top: 24px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 768px) {
   .selected-topic-details-grid {
     grid-template-columns: 1fr;
   }
@@ -953,7 +953,7 @@
 
 .topic-info-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -1047,6 +1047,12 @@
   font-weight: 600;
   margin-bottom: 6px;
   display: block;
+}
+
+.weakness-chips-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .weakness-chips-container {
@@ -1171,3 +1177,15 @@
 
 
 
+
+.heatmap-cell {
+  transition: all 0.3s ease;
+}
+
+/* Critical heatmap cell styling */
+.heatmap-cell-critical {
+  border: 1.5px solid rgba(239, 68, 68, 0.9);
+  text-shadow: 0 0 3px rgba(239, 68, 68, 0.8);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  animation: pulseGlow 2s infinite alternate;
+}

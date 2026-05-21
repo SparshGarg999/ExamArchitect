@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Settings, Check, X, ChevronRight, Upload, BrainCircuit, RefreshCw, Database, FileText } from 'lucide-react';
 
 export default function AdminPanel({ onNavigate, apiBaseUrl, addToast }) {
@@ -18,7 +18,7 @@ export default function AdminPanel({ onNavigate, apiBaseUrl, addToast }) {
   useEffect(() => {
     fetch(`${apiBaseUrl}/api/exams`)
       .then(res => res.json())
-      .then(data => {
+      .then(() => {
         setExams(data);
         if (data.length > 0) {
           setSelectedExamId(data[0].id);
@@ -32,7 +32,7 @@ export default function AdminPanel({ onNavigate, apiBaseUrl, addToast }) {
     if (selectedExamId) {
       fetch(`${apiBaseUrl}/api/exams/${selectedExamId}/papers`)
         .then(res => res.json())
-        .then(data => {
+        .then(() => {
           setPapers(data);
           if (data.length > 0) {
             setSelectedPaperId(data[0].id);
@@ -43,7 +43,7 @@ export default function AdminPanel({ onNavigate, apiBaseUrl, addToast }) {
       // Fetch topics for taxonomy dropdowns
       fetch(`${apiBaseUrl}/api/exams/${selectedExamId}/topics`)
         .then(res => res.json())
-        .then(data => {
+        .then(() => {
           const topicNames = [];
           data.forEach(t => {
             topicNames.push(t.name);
@@ -63,7 +63,7 @@ export default function AdminPanel({ onNavigate, apiBaseUrl, addToast }) {
       setLoading(true);
       fetch(`${apiBaseUrl}/api/papers/${selectedPaperId}/staged`)
         .then(res => res.json())
-        .then(data => {
+        .then(() => {
           if (data && data.length > 0) {
             setQuestions(data.map((q, i) => ({ ...q, id: i + 1, is_simulated: false })));
           } else {
@@ -127,7 +127,7 @@ export default function AdminPanel({ onNavigate, apiBaseUrl, addToast }) {
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         return res.json();
       })
-      .then(data => {
+      .then(() => {
         setLoading(false);
         if (addToast) addToast(`Question ${editedData.question_number || currentIndex + 1} approved & ingested!`, 'success');
         
@@ -163,7 +163,7 @@ export default function AdminPanel({ onNavigate, apiBaseUrl, addToast }) {
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         return res.json();
       })
-      .then(data => {
+      .then(() => {
         setRetagging(false);
         if (addToast) addToast(`AI re-tagging complete: ${data.question_count} questions processed`, 'success');
         // Refresh staged questions
@@ -186,7 +186,7 @@ export default function AdminPanel({ onNavigate, apiBaseUrl, addToast }) {
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         return res.json();
       })
-      .then(data => {
+      .then(() => {
         setRegenerating(false);
         if (addToast) addToast(`Successfully generated ${data.predictions_count} predictions!`, 'success');
       })

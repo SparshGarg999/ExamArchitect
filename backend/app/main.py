@@ -62,6 +62,30 @@ def get_categories(db: Session = Depends(get_db)):
         })
     return result
 
+@app.get("/api/exams/{exam_id}", response_model=Dict[str, Any])
+def get_exam(exam_id: int, db: Session = Depends(get_db)):
+    exam = db.query(Exam).filter_by(id=exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    topics = db.query(Topic).filter_by(exam_id=exam.id, parent_topic_id=None).all()
+    topic_data = []
+    for topic in topics:
+        subtopics = db.query(Topic).filter_by(parent_topic_id=topic.id).all()
+        topic_data.append({
+            "id": topic.id,
+            "name": topic.name,
+            "subtopics": [{"id": st.id, "name": st.name} for st in subtopics]
+        })
+
+    return {
+        "id": exam.id,
+        "category_id": exam.category_id,
+        "name": exam.name,
+        "full_name": exam.full_name,
+        "topics": topic_data
+    }
+
 @app.get("/api/exams", response_model=List[Dict[str, Any]])
 def get_exams(category_id: int = None, db: Session = Depends(get_db)):
     query = db.query(Exam)
@@ -260,8 +284,13 @@ def get_paper_questions(paper_id: int, topic_id: int = None, subject_id: int = N
     return result
 
 @app.get("/api/questions", response_model=List[Dict[str, Any]])
-def get_global_questions(topic_id: int = None, subject_id: int = None, search: str = None, db: Session = Depends(get_db)):
+def get_global_questions(topic_id: int = None, subject_id: int = None, exam_id: int = None, search: str = None, limit: int = 50, offset: int = 0, db: Session = Depends(get_db)):
     query = db.query(Question)
+    if exam_id:
+        query = query.join(Paper).filter(Paper.exam_id == exam_id)
+    else:
+        query = query.join(Paper)
+
     if topic_id:
         query = query.filter((Question.topic_id == topic_id) | (Question.secondary_topic_id == topic_id))
     if subject_id:
@@ -272,8 +301,11 @@ def get_global_questions(topic_id: int = None, subject_id: int = None, search: s
         query = query.filter(Question.question_text.ilike(make_search_pattern(search)))
     
     # Order by paper year desc, then question number
-    query = query.join(Paper).order_by(Paper.year.desc(), Question.question_number)
+    query = query.order_by(Paper.year.desc(), Question.question_number)
     
+    # Pagination
+    query = query.offset(offset).limit(limit)
+
     questions = query.all()
     result = []
     for q in questions:
@@ -287,6 +319,7 @@ def get_global_questions(topic_id: int = None, subject_id: int = None, search: s
             "id": q.id,
             "paper_id": q.paper_id,
             "paper_year": q.paper.year if q.paper else None,
+            "paper_name": f"{q.paper.year} {q.paper.session}" if q.paper else None,
             "question_number": q.question_number,
             "question_text": q.question_text,
             "question_style": q.question_style,
