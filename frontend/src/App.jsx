@@ -444,6 +444,9 @@ function App() {
     },
     scales: {
       x: {
+        border: {
+          color: 'rgba(255, 255, 255, 0.2)'
+        },
         title: {
           display: true,
           text: 'Year of Exam',
@@ -451,7 +454,7 @@ function App() {
           font: { family: 'Outfit', size: 10, weight: 'bold' }
         },
         grid: {
-          color: 'rgba(255, 255, 255, 0.03)',
+          color: 'rgba(255, 255, 255, 0.09)',
         },
         ticks: {
           color: '#94a3b8',
@@ -459,6 +462,9 @@ function App() {
         }
       },
       y: {
+        border: {
+          color: 'rgba(255, 255, 255, 0.2)'
+        },
         title: {
           display: true,
           text: 'Marks Weightage',
@@ -466,7 +472,7 @@ function App() {
           font: { family: 'Outfit', size: 10, weight: 'bold' }
         },
         grid: {
-          color: 'rgba(255, 255, 255, 0.03)',
+          color: 'rgba(255, 255, 255, 0.09)',
         },
         ticks: {
           color: '#94a3b8',
