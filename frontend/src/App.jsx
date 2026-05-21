@@ -37,6 +37,7 @@ import {
 } from 'chart.js';
 import './App.css';
 import AdminPanel from './components/AdminPanel';
+import QuestionCard from './components/QuestionCard';
 
 ChartJS.register(
   CategoryScale,
@@ -49,39 +50,6 @@ ChartJS.register(
 );
 
 const API_BASE = 'http://localhost:8000';
-
-// ============= Helper to parse MCQ Options =============
-function parseOptions(text) {
-  if (!text) return null;
-  
-  // Regex to match options like (A) ... (B) ...
-  const mcqPattern = /(?:\(|\s|^)([A-D])\)(?:\s+|:)([\s\S]*?)(?=\s*(?:\(|^[A-D]\)|[A-D]\s*[\.):]|$))/g;
-  const matches = [...text.matchAll(mcqPattern)];
-  if (matches.length > 0) {
-    const options = matches.map(m => ({
-      label: m[1],
-      text: m[2].trim()
-    }));
-    const firstOptionIdx = text.search(/(?:\(|\s|^)[A-D]\)(?:\s+|:)/);
-    const cleanText = firstOptionIdx !== -1 ? text.substring(0, firstOptionIdx).trim() : text;
-    return { cleanText, options };
-  }
-
-  // Regex to match options like A. ... B. ...
-  const dotPattern = /(?:\s|^)([A-D])\.(?:\s+|:)([\s\S]*?)(?=\s*(?:^[A-D]\.|[A-D]\s*[\.):]|$))/g;
-  const matchesDot = [...text.matchAll(dotPattern)];
-  if (matchesDot.length > 0) {
-    const options = matchesDot.map(m => ({
-      label: m[1],
-      text: m[2].trim()
-    }));
-    const firstOptionIdx = text.search(/(?:\s|^)[A-D]\.(?:\s+|:)/);
-    const cleanText = firstOptionIdx !== -1 ? text.substring(0, firstOptionIdx).trim() : text;
-    return { cleanText, options };
-  }
-
-  return null;
-}
 
 // ============= Helper to generate Fallback study roadmap =============
 function getFallbackPlan(days) {
@@ -127,25 +95,6 @@ function ToastContainer({ toasts, onDismiss }) {
           <span>{toast.message}</span>
         </div>
       ))}
-    </div>
-  );
-}
-
-// ============= Answer Spoiler Component =============
-function AnswerSpoiler({ answer }) {
-  const [open, setOpen] = useState(false);
-  if (!answer) return null;
-  return (
-    <div className="answer-spoiler">
-      <button className={`answer-spoiler-toggle ${open ? 'open' : ''}`} onClick={() => setOpen(!open)}>
-        <ChevronRight size={14} />
-        {open ? 'Hide Answer' : 'Show Answer'}
-      </button>
-      {open && (
-        <div className="answer-spoiler-content">
-          Correct Answer: {answer}
-        </div>
-      )}
     </div>
   );
 }
@@ -1235,68 +1184,9 @@ function App() {
                     </p>
                   </div>
                 ) : (
-                  questions.map(q => {
-                    const diffLabel = q.difficulty === 'H' ? 'Hard' : q.difficulty === 'M' ? 'Medium' : 'Easy';
-                    const parsed = parseOptions(q.question_text);
-                    const cleanText = parsed ? parsed.cleanText : q.question_text;
-                    const options = parsed ? parsed.options : [];
-
-                    return (
-                      <div key={q.id} className="question-card">
-                        {/* Card Header */}
-                        <div className="question-card-header">
-                          <div className="question-card-header-left">
-                            <span className="question-number-badge">Q.{q.question_number}</span>
-                            
-                            {/* Year Badge if showing All Papers */}
-                            {!selectedPaper && q.paper_year && (
-                              <span className="q-badge" style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                GATE CS {q.paper_year}
-                              </span>
-                            )}
-                            
-                            <div className="question-meta-badges">
-                              <span className="q-badge q-badge-type">{q.question_style}</span>
-                              <span className="q-badge q-badge-marks">{q.marks} {q.marks === 1 ? 'Mark' : 'Marks'}</span>
-                              <span className={`q-badge q-badge-difficulty-${q.difficulty}`}>{diffLabel}</span>
-                            </div>
-                          </div>
-                          {(q.parent_subject_name || q.topic_name) && (
-                            <span className="q-badge q-badge-topic">
-                              {q.parent_subject_name || q.topic_name}
-                              {q.parent_subject_name && q.topic_name && q.parent_subject_name !== q.topic_name && ` › ${q.topic_name}`}
-                            </span>
-                          )}
-                        </div>
-                        
-                        {/* Card Body */}
-                        <div className="question-card-body">
-                          <p className="question-text">{cleanText}</p>
-                          
-                          {/* MCQ/MSQ option choices rendering */}
-                          {options.length > 0 && (
-                            <div className="question-options-grid">
-                              {options.map((opt, oIdx) => (
-                                <div key={oIdx} className="question-option-card">
-                                  <span className="question-option-label">{opt.label}</span>
-                                  <span className="question-option-text">{opt.text}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {q.has_diagram && (
-                            <div className="question-diagram-placeholder">
-                              <Image size={20} />
-                              <span>This question contains a diagram or visual element</span>
-                            </div>
-                          )}
-                          
-                          <AnswerSpoiler answer={q.correct_answer} />
-                        </div>
-                      </div>
-                    );
-                  })
+                  questions.map(q => (
+                    <QuestionCard key={q.id} q={q} selectedPaper={selectedPaper} />
+                  ))
                 )}
               </div>
             </div>
