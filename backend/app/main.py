@@ -467,10 +467,10 @@ def bulk_ingest_historical_data(db: Session = Depends(get_db)):
     script_path = os.path.join(backend_dir, "parse_and_ingest_all.py")
     
     try:
-        # Run parse_and_ingest_all.py with a 120-second timeout
+        # Run parse_and_ingest_all.py with an increased 300-second timeout margin
         result = subprocess.run(
             [sys.executable, script_path],
-            capture_output=True, text=True, encoding="utf-8", timeout=120,
+            capture_output=True, text=True, encoding="utf-8", timeout=300,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         )
         if result.returncode != 0:
