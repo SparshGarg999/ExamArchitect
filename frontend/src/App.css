@@ -1171,3 +1171,20 @@
 
 
 
+
+/* Critical heatmap cell styling */
+.heatmap-cell-critical {
+  border: 1.5px solid rgba(239, 68, 68, 0.9);
+  text-shadow: 0 0 3px rgba(239, 68, 68, 0.8);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  animation: pulse-red 2s infinite alternate;
+}
+
+@keyframes pulse-red {
+  from {
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.3);
+  }
+  to {
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.65);
+  }
+}

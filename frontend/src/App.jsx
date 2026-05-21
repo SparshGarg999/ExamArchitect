@@ -506,42 +506,37 @@ function App() {
     
     let bgIntensity = 'rgba(255,255,255,0.02)';
     let textColor = 'var(--text-secondary)';
-    let extraStyles = {};
+    let className = '';
     
     if (marks > 0) {
       if (marks <= 3) {
         // Low: Amber / yellow gradient
-        bgIntensity = `rgba(251, 191, 36, ${0.15 + (marks/3) * 0.25})`;
+        bgIntensity = `linear-gradient(135deg, rgba(251, 191, 36, ${0.15 + (marks/3) * 0.25}), rgba(217, 119, 6, ${0.15 + (marks/3) * 0.25}))`;
       } else if (marks <= 7) {
         // Medium: Orange gradient
-        bgIntensity = `rgba(249, 115, 22, ${0.4 + ((marks-3)/4) * 0.3})`;
+        bgIntensity = `linear-gradient(135deg, rgba(249, 115, 22, ${0.4 + ((marks-3)/4) * 0.3}), rgba(234, 88, 12, ${0.4 + ((marks-3)/4) * 0.3}))`;
         textColor = '#ffffff';
       } else {
         // Critical: Red/coral gradient
-        bgIntensity = `rgba(239, 68, 68, ${0.7 + ((marks-7)/9) * 0.25})`;
+        bgIntensity = `linear-gradient(135deg, rgba(239, 68, 68, ${0.7 + ((marks-7)/9) * 0.25}), rgba(185, 28, 28, ${0.7 + ((marks-7)/9) * 0.25}))`;
         textColor = '#ffffff';
-        extraStyles = {
-          border: '1.5px solid rgba(239, 68, 68, 0.9)',
-          textShadow: '0 0 3px rgba(239, 68, 68, 0.8)',
-          boxShadow: '0 0 8px rgba(239, 68, 68, 0.5)',
-          animation: 'pulseGlow 2s infinite alternate'
-        };
+        className = 'heatmap-cell-critical';
       }
     }
     
     return (
       <div 
-        key={key} 
+        key={key}
+        className={className}
         style={{ 
-          backgroundColor: bgIntensity, 
+          background: bgIntensity,
           color: textColor,
           padding: '6px 2px', 
           borderRadius: '4px', 
           fontWeight: 'bold', 
           textAlign: 'center',
           fontSize: '0.75rem',
-          border: '1px solid rgba(255,255,255,0.02)',
-          ...extraStyles
+          border: marks > 7 ? undefined : '1px solid rgba(255,255,255,0.02)'
         }}
       >
         {marks > 0 ? `${marks.toFixed(0)}m` : '0m'}
