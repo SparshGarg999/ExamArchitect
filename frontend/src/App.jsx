@@ -9,6 +9,7 @@ import {
   ArrowRight, 
   ChevronLeft, 
   ChevronRight,
+  ChevronDown,
   Calendar, 
   ListTodo,
   TrendingUp,
@@ -190,6 +191,14 @@ function App() {
   const [questionSearch, setQuestionSearch] = useState('');
   const [questionSubjectFilter, setQuestionSubjectFilter] = useState('');
   const [examTopics, setExamTopics] = useState([]);
+  const [weaknessExpandedSubjects, setWeaknessExpandedSubjects] = useState({});
+
+  const toggleWeaknessSubjectExpansion = (subjectId) => {
+    setWeaknessExpandedSubjects(prev => ({
+      ...prev,
+      [subjectId]: !prev[subjectId]
+    }));
+  };
 
   const topicDetailsRef = useRef(null);
 
@@ -299,8 +308,10 @@ function App() {
   // Weakness Toggle Handler
   const handleToggleWeakness = (topicName) => {
     let list = studyPlanWeaknesses.split(',').map(s => s.trim()).filter(Boolean);
-    if (list.includes(topicName)) {
-      list = list.filter(item => item !== topicName);
+    const lowerList = list.map(s => s.toLowerCase());
+
+    if (lowerList.includes(topicName.toLowerCase())) {
+      list = list.filter(item => item.toLowerCase() !== topicName.toLowerCase());
     } else {
       list.push(topicName);
     }
@@ -1070,10 +1081,18 @@ function App() {
                     <span className="weakness-chips-label">Curated Subjects & Topics (Click to toggle):</span>
                     <div className="curated-weakness-hierarchy">
                       {examTopics.map(subject => {
-                        const isSubjectActive = studyPlanWeaknesses.split(',').map(s => s.trim()).includes(subject.name);
+                        const activeList = studyPlanWeaknesses.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+                        const isSubjectActive = activeList.includes(subject.name.toLowerCase());
                         return (
                           <div key={subject.id} className="subject-weakness-group">
-                            <div className="subject-title-chip-row">
+                            <div className="subject-title-chip-row" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button
+                                type="button"
+                                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                onClick={() => toggleWeaknessSubjectExpansion(subject.id)}
+                              >
+                                {weaknessExpandedSubjects[subject.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
                               <button 
                                 className={`weakness-chip subject-chip ${isSubjectActive ? 'active' : ''}`}
                                 onClick={() => handleToggleWeakness(subject.name)}
@@ -1081,20 +1100,22 @@ function App() {
                                 {subject.name}
                               </button>
                             </div>
-                            <div className="subtopics-chip-row">
-                              {subject.subtopics && subject.subtopics.map(subtopic => {
-                                const isSubtopicActive = studyPlanWeaknesses.split(',').map(s => s.trim()).includes(subtopic.name);
-                                return (
-                                  <button 
-                                    key={subtopic.id} 
-                                    className={`weakness-chip subtopic-chip ${isSubtopicActive ? 'active' : ''}`}
-                                    onClick={() => handleToggleWeakness(subtopic.name)}
-                                  >
-                                    {subtopic.name}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                            {weaknessExpandedSubjects[subject.id] && (
+                              <div className="subtopics-chip-row" style={{ marginTop: '8px', paddingLeft: '28px' }}>
+                                {subject.subtopics && subject.subtopics.map(subtopic => {
+                                  const isSubtopicActive = activeList.includes(subtopic.name.toLowerCase());
+                                  return (
+                                    <button
+                                      key={subtopic.id}
+                                      className={`weakness-chip subtopic-chip ${isSubtopicActive ? 'active' : ''}`}
+                                      onClick={() => handleToggleWeakness(subtopic.name)}
+                                    >
+                                      {subtopic.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         );
                       })}

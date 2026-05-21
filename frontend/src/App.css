@@ -1049,6 +1049,12 @@
   display: block;
 }
 
+.weakness-chips-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .weakness-chips-container {
   display: flex;
   flex-wrap: wrap;
