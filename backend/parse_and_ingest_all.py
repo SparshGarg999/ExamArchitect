@@ -192,6 +192,29 @@ TYPICAL_DISTRIBUTION = {
 }
 
 
+MATH_CHAR_MAP = {
+    'ꟽ': 'M',
+    '𝓍': 'x', '𝓎': 'y', '𝓏': 'z', '𝓊': 'u', '𝓋': 'v', '𝓌': 'w', '𝓅': 'p', '𝓆': 'q',
+    '𝒶': 'a', '𝒷': 'b', '𝒸': 'c', '𝒹': 'd', '𝑒': 'e', '𝒻': 'f', '𝑔': 'g', '𝒽': 'h',
+    '𝒾': 'i', '𝒿': 'j', '𝓀': 'k', '𝓁': 'l', '𝓂': 'm', '𝓃': 'n', '𝑜': 'o', '𝓇': 'r',
+    '𝓈': 's', '𝓉': 't',
+    '𝑎': 'a', '𝑏': 'b', '𝑐': 'c', '𝑑': 'd', '𝑒': 'e', '𝑓': 'f', '𝑔': 'g', '𝑕': 'h',
+    '𝑖': 'i', '𝑗': 'j', '𝑘': 'k', '𝑙': 'l', '𝑚': 'm', '𝑛': 'n', '𝑜': 'o', '𝑝': 'p',
+    '𝑞': 'q', '𝑟': 'r', '𝑠': 's', '𝑡': 't', '𝑢': 'u', '𝑣': 'v', '𝑤': 'w', '𝑥': 'x',
+    '𝑦': 'y', '𝑧': 'z',
+    '𝐴': 'A', '𝐵': 'B', '𝐶': 'C', '𝐷': 'D', '𝐸': 'E', '𝐹': 'F', '𝐺': 'G', '𝐻': 'H',
+    '𝐼': 'I', '𝐽': 'J', '𝐾': 'K', '𝐿': 'L', '𝑀': 'M', '𝑁': 'N', '𝑂': 'O', '𝑃': 'P',
+    '𝑄': 'Q', '𝑅': 'R', '𝑆': 'S', '𝑇': 'T', '𝑈': 'U', '𝑉': 'V', '𝑊': 'W', '𝑋': 'X',
+    '𝑌': 'Y', '𝑍': 'Z',
+}
+
+
+def clean_math_text(text: str) -> str:
+    for bad, good in MATH_CHAR_MAP.items():
+        text = text.replace(bad, good)
+    return text
+
+
 def extract_text_direct(pdf_path: str) -> str:
     """Extract text from PDF directly in the main process (20x faster)."""
     try:
@@ -400,7 +423,8 @@ def main():
             if len(parsed_qs) >= 15:
                 real_extractions += 1
                 for idx, pq in enumerate(parsed_qs):
-                    seq_num = idx + 1
+                    seq_num = pq["q_num"]
+                    pq["text"] = clean_math_text(pq["text"])
                     tag = classify_question(pq["text"], seq_num, year)
                     ingest_question(db=db, paper_id=paper.id, parsed_data=tag)
                     real_q_nums.add(seq_num)
