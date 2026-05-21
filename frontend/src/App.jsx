@@ -207,7 +207,7 @@ function App() {
 
   useEffect(() => {
     if (selectedHeatmapTopic && topicDetailsRef.current) {
-      topicDetailsRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      topicDetailsRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [selectedHeatmapTopic]);
 
@@ -900,16 +900,25 @@ function App() {
 
                     <div className="topic-info-stats">
                       <div className="topic-info-stat-box">
-                        <span>Max Recorded Weight</span>
+                        <span>Total Marks</span>
                         <strong>
                           {(() => {
-                            const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.total_marks : y);
-                            return values.length > 0 ? `${Math.max(...values).toFixed(1)}m` : 'N/A';
+                            const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.total_marks : 0);
+                            return values.length > 0 ? `${values.reduce((a, b) => a + b, 0).toFixed(1)}m` : '0m';
                           })()}
                         </strong>
                       </div>
                       <div className="topic-info-stat-box">
-                        <span>Avg Difficulty Trend</span>
+                        <span>Question Count</span>
+                        <strong>
+                          {(() => {
+                            const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.question_count : 0);
+                            return values.length > 0 ? values.reduce((a, b) => a + b, 0) : 0;
+                          })()}
+                        </strong>
+                      </div>
+                      <div className="topic-info-stat-box">
+                        <span>Avg Difficulty</span>
                         <strong style={{ color: 'var(--accent-amber)' }}>
                           {(() => {
                             const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.avg_difficulty : 2).filter(Boolean);
