@@ -9,6 +9,9 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Clear any existing children to prevent duplicate canvases in Strict Mode
+    containerRef.current.innerHTML = '';
+
     // 1. Setup Scene, Camera, Renderer
     const scene = new THREE.Scene();
     
