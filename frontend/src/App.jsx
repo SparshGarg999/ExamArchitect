@@ -35,7 +35,7 @@ export default function App() {
           <Route path="/" element={<Home addToast={addToast} />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/mock-exam" element={<MockExam />} />
+          <Route path="/mock-exam" element={<MockExam addToast={addToast} />} />
           
           <Route path="/exam/:id" element={<Dashboard addToast={addToast} />} />
           

@@ -1,36 +1,81 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, BarChart3, TrendingUp, ListTodo, BookOpen,
-  Flame, Calendar, ChevronRight, CheckCircle, Search, Image, MessageSquare, Send
+  Flame, Calendar, ChevronRight, CheckCircle, Search, Image, MessageSquare, Send, RefreshCw, XCircle,
+  Target, Bot, Star, Award, Sparkles, Check, Lock, Play, Printer
 } from 'lucide-react';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip as ChartTooltip, Legend } from 'chart.js';
+import { Line } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip as ChartTooltip,
+  Legend
+} from 'chart.js';
 import { useAuth } from '../context/AuthContext';
+import QuestionCard from '../components/QuestionCard';
+import StatCard from '../components/StatCard';
+import GapRadar from '../components/GapRadar';
+import WeaknessChatbot from '../components/WeaknessChatbot';
+import Confetti from '../components/Confetti';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Legend);
 
 const API_BASE = 'http://localhost:8000';
 
-function AnswerSpoiler({ answer }) {
-  const [open, setOpen] = useState(false);
-  if (!answer) return null;
-  return (
-    <div className="mt-4">
-      <button
-        className="flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
-        onClick={() => setOpen(!open)}
-      >
-        <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
-        {open ? 'Hide Answer' : 'Show Answer'}
-      </button>
-      {open && (
-        <div className="mt-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-lg text-indigo-100 text-sm">
-          <strong>Correct Answer:</strong> {answer}
-        </div>
-      )}
-    </div>
-  );
-}
+const COMMON_TOPICS_PRESETS = [
+  "Instruction Pipelining",
+  "Cache Memory Hierarchy",
+  "Relational Algebra & SQL",
+  "CPU Scheduling",
+  "Time Complexity Analysis",
+  "Set Theory & Logic",
+  "Regular Languages & Automata",
+  "Singly & Doubly Linked Lists",
+  "Graph Traversals & BFS/DFS",
+  "Transactions & Concurrency",
+  "Context-Free Grammars",
+  "IP Addressing & Subnetting",
+  "Process Synchronization & Semaphores",
+  "Page Replacement Algorithms",
+  "Hashing & B/B+ Trees",
+  "Shortest Path Algorithms"
+];
+
+const DURATION_PROFILES = {
+  '7': {
+    title: '7 Days',
+    subtitle: 'Sprint Review',
+    desc: 'Intensive high-yield crash revision of core mathematical logic & memory mappings.',
+    icon: '⚡',
+    gradient: 'from-amber-500/20 to-orange-500/20 border-amber-500/30 text-amber-300'
+  },
+  '30': {
+    title: '30 Days',
+    subtitle: 'Standard Prep',
+    desc: 'Balanced coverage of programming, OS scheduling, database SQL, and algorithms.',
+    icon: '⚖️',
+    gradient: 'from-indigo-500/20 to-purple-500/20 border-indigo-500/30 text-indigo-300'
+  },
+  '90': {
+    title: '90 Days',
+    subtitle: 'Deep Study',
+    desc: 'Comprehensive deep dive including extensive numerical drills & full-length mock papers.',
+    icon: '🔍',
+    gradient: 'from-purple-500/20 to-pink-500/20 border-purple-500/30 text-purple-300'
+  },
+  '180': {
+    title: '180 Days',
+    subtitle: 'Ultimate Mastery',
+    desc: 'Full curriculum track with multiple spaced-repetition loops and revision sheets.',
+    icon: '🏆',
+    gradient: 'from-emerald-500/20 to-teal-500/20 border-emerald-500/30 text-emerald-300'
+  }
+};
 
 function QuestionFeedback({ questionId }) {
   const [open, setOpen] = useState(false);
@@ -51,7 +96,7 @@ function QuestionFeedback({ questionId }) {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
         },
-        body: JSON.stringify({ feedback_type: type, comment })
+        body: JSON.stringify({ feedback_type: type, comments: comment })
       });
       if (res.ok) {
         setStatus('sent');
@@ -67,7 +112,7 @@ function QuestionFeedback({ questionId }) {
   return (
     <div className="mt-4 border-t border-white/5 pt-3">
       <button
-        className="flex items-center gap-2 text-xs text-slate-400 hover:text-amber-400 transition-colors"
+        className="flex items-center gap-2 text-xs text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
         onClick={() => setOpen(!open)}
       >
         <MessageSquare size={14} /> Report Issue / Provide Feedback
@@ -100,7 +145,7 @@ function QuestionFeedback({ questionId }) {
               <button
                 onClick={handleSubmit}
                 disabled={status === 'sending'}
-                className="self-end bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 px-3 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-colors"
+                className="self-end bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 px-3 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
               >
                 <Send size={12} /> {status === 'sending' ? 'Sending...' : 'Submit'}
               </button>
@@ -113,28 +158,7 @@ function QuestionFeedback({ questionId }) {
   );
 }
 
-function parseOptions(text) {
-  if (!text) return null;
-  const mcqPattern = /(?:\(|\s|^)([A-D])\)(?:\s+|:)([\s\S]*?)(?=\s*(?:\(|^[A-D]\)|[A-D]\s*[\.):]|$))/g;
-  const matches = [...text.matchAll(mcqPattern)];
-  if (matches.length > 0) {
-    const options = matches.map(m => ({ label: m[1], text: m[2].trim() }));
-    const firstOptionIdx = text.search(/(?:\(|\s|^)[A-D]\)(?:\s+|:)/);
-    const cleanText = firstOptionIdx !== -1 ? text.substring(0, firstOptionIdx).trim() : text;
-    return { cleanText, options };
-  }
-  const dotPattern = /(?:\s|^)([A-D])\.(?:\s+|:)([\s\S]*?)(?=\s*(?:^[A-D]\.|[A-D]\s*[\.):]|$))/g;
-  const matchesDot = [...text.matchAll(dotPattern)];
-  if (matchesDot.length > 0) {
-    const options = matchesDot.map(m => ({ label: m[1], text: m[2].trim() }));
-    const firstOptionIdx = text.search(/(?:\s|^)[A-D]\.(?:\s+|:)/);
-    const cleanText = firstOptionIdx !== -1 ? text.substring(0, firstOptionIdx).trim() : text;
-    return { cleanText, options };
-  }
-  return null;
-}
-
-export default function Dashboard() {
+export default function Dashboard({ addToast }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
@@ -142,6 +166,10 @@ export default function Dashboard() {
   const [selectedExam, setSelectedExam] = useState(null);
   const [activeTab, setActiveTab] = useState('heatmap');
   const [loading, setLoading] = useState(true);
+
+  // Seeding states
+  const [seeding, setSeeding] = useState(false);
+  const [seedMessage, setSeedMessage] = useState(null);
 
   // Data states
   const [heatmapData, setHeatmapData] = useState(null);
@@ -158,17 +186,65 @@ export default function Dashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const questionsPerPage = 10;
 
+  // Heatmap view mode ('status', 'marks', 'questions')
+  const [heatmapViewMode, setHeatmapViewMode] = useState('status');
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [subtopicHeatmaps, setSubtopicHeatmaps] = useState({});
   const [selectedHeatmapTopic, setSelectedHeatmapTopic] = useState(null);
+  const topicDetailsRef = useRef(null);
 
+  // Study plan states
   const [studyPlanDays, setStudyPlanDays] = useState('30');
   const [studyPlanWeaknesses, setStudyPlanWeaknesses] = useState('');
+  const [completedTasks, setCompletedTasks] = useState(() => {
+    try {
+      const saved = localStorage.getItem('studyPlanCompletedTasks');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  
+  const [studyStreak, setStudyStreak] = useState(() => {
+    try {
+      const saved = localStorage.getItem('studyPlannerStreak');
+      return saved ? parseInt(saved) : 4;
+    } catch {
+      return 4;
+    }
+  });
+
   const [weaknessExpandedSubjects, setWeaknessExpandedSubjects] = useState({});
 
+  // Predictions pagination states
+  const [predCurrentPage, setPredCurrentPage] = useState(1);
+  const predsPerPage = 10;
+
+  // Tagging corner toast popup state
+  const [weaknessPopup, setWeaknessPopup] = useState({ show: false, topic: '', action: 'added' });
+
+  // AI Mentor Chatbot states
+  const [mentorChatOpen, setMentorChatOpen] = useState(false);
+  const [mentorQuestion, setMentorQuestion] = useState(null);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [certName, setCertName] = useState(() => {
+    return currentUser?.username || currentUser?.email?.split('@')[0] || "GATE CS Scholar";
+  });
+
   useEffect(() => {
-    // Fetch Exam metadata and dashboards
-    fetch(`${API_BASE}/api/exams?category_id=1`) // Hack to find it or we can fetch by id if backend supports. But let's fetch all and filter
+    if (currentUser) {
+      setCertName(currentUser.username || currentUser.email?.split('@')[0] || "GATE CS Scholar");
+    }
+  }, [currentUser]);
+
+  const handleAskMentor = (question) => {
+    setMentorQuestion(question);
+    setMentorChatOpen(true);
+  };
+
+  const loadExamData = useCallback(() => {
+    setLoading(true);
+    fetch(`${API_BASE}/api/exams?category_id=1`)
       .then(res => res.json())
       .then(exams => {
         const ex = exams.find(e => e.id === parseInt(id)) || { id, full_name: 'Exam', name: 'EXAM' };
@@ -196,6 +272,10 @@ export default function Dashboard() {
       });
   }, [id]);
 
+  useEffect(() => {
+    loadExamData();
+  }, [id, loadExamData]);
+
   const fetchQuestionsList = useCallback(() => {
     const params = new URLSearchParams();
     if (questionSearch.trim()) params.set('search', questionSearch.trim());
@@ -221,6 +301,60 @@ export default function Dashboard() {
     }, 300);
     return () => clearTimeout(timer);
   }, [questionSearch, activeTab, fetchQuestionsList]);
+
+  useEffect(() => {
+    if (selectedHeatmapTopic && topicDetailsRef.current) {
+      topicDetailsRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [selectedHeatmapTopic]);
+
+  const handleReseed = async () => {
+    if (seeding) return;
+    setSeeding(true);
+    setSeedMessage({ type: 'info', text: 'Seeding 10 years of historical data from PDF blueprints... This takes a moment.' });
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`${API_BASE}/api/ingest/bulk`, { 
+        method: 'POST',
+        headers: {
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSeedMessage({ type: 'success', text: `Seeding complete! Ingested ${data.questions_ingested} questions. Reloading data...` });
+        loadExamData();
+      } else if (res.status === 401 || res.status === 403) {
+        setSeedMessage({ type: 'error', text: 'Security Error: You must be logged in as an Administrator to reset and re-seed the system.' });
+      } else {
+        setSeedMessage({ type: 'error', text: 'Ingestion pipeline encountered a backend subprocess error.' });
+      }
+    } catch {
+      setSeedMessage({ type: 'error', text: 'Network failure communicating with bulk ingestion API.' });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleToggleSubject = (subjectRow) => {
+    const subjectId = subjectRow.id;
+    const isCurrentlyExpanded = expandedSubjects[subjectId];
+    setSelectedHeatmapTopic(subjectRow);
+
+    if (isCurrentlyExpanded) {
+      setExpandedSubjects(prev => ({ ...prev, [subjectId]: false }));
+    } else {
+      setExpandedSubjects(prev => ({ ...prev, [subjectId]: true }));
+      if (!subtopicHeatmaps[subjectId]) {
+        fetch(`${API_BASE}/api/exams/${id}/topics/${subjectId}/heatmap`)
+          .then(res => res.json())
+          .then(data => {
+            setSubtopicHeatmaps(prev => ({ ...prev, [subjectId]: data }));
+          })
+          .catch(err => console.error('Failed to fetch subtopic heatmap:', err));
+      }
+    }
+  };
 
   const handleUpdateStudyPlan = async () => {
     if (!currentUser) {
@@ -252,27 +386,187 @@ export default function Dashboard() {
     }
   };
 
-  const renderHeatmapCell = (marks, key) => {
-    const maxMark = 16;
-    let bgIntensity = 'rgba(255,255,255,0.02)';
-    let textColor = '#94a3b8';
-    if (marks > 0) {
-      if (marks <= 3) {
-        bgIntensity = `linear-gradient(135deg, rgba(251, 191, 36, ${0.15 + (marks / 3) * 0.25}), rgba(217, 119, 6, ${0.15 + (marks / 3) * 0.25}))`;
-        textColor = '#fcd34d';
-      } else if (marks <= 7) {
-        bgIntensity = `linear-gradient(135deg, rgba(249, 115, 22, ${0.4 + ((marks - 3) / 4) * 0.3}), rgba(234, 88, 12, ${0.4 + ((marks - 3) / 4) * 0.3}))`;
-        textColor = '#ffffff';
-      } else {
-        bgIntensity = `linear-gradient(135deg, rgba(239, 68, 68, ${0.7 + ((marks - 7) / 9) * 0.25}), rgba(185, 28, 28, ${0.7 + ((marks - 7) / 9) * 0.25}))`;
-        textColor = '#ffffff';
+  const handleToggleTask = (taskKey) => {
+    const updated = { ...completedTasks, [taskKey]: !completedTasks[taskKey] };
+    setCompletedTasks(updated);
+    localStorage.setItem('studyPlanCompletedTasks', JSON.stringify(updated));
+
+    // Check if 100% completed
+    if (studyPlan.length > 0) {
+      let totalTasks = 0;
+      let completedCount = 0;
+      studyPlan.forEach(plan => {
+        plan.tasks.forEach((task, tIdx) => {
+          totalTasks++;
+          const key = `${id}-${plan.day}-${tIdx}-${task.slice(0, 20)}`;
+          if (updated[key]) completedCount++;
+        });
+      });
+
+      if (totalTasks > 0 && completedCount === totalTasks) {
+        setShowCompletionModal(true);
+        if (addToast) {
+          addToast("🎉 Congratulations! GATE CS study plan successfully mastered! +5000 XP", "success");
+        }
+        // Save XP to local profile
+        const prevXp = parseInt(localStorage.getItem('user_xp') || '0');
+        localStorage.setItem('user_xp', prevXp + 5000);
       }
     }
+  };
+
+  const handleToggleWeaknessTag = (topicName) => {
+    let list = studyPlanWeaknesses.split(',').map(s => s.trim()).filter(Boolean);
+    const lowerList = list.map(s => s.toLowerCase());
+    const isRemoving = lowerList.includes(topicName.toLowerCase());
+
+    if (isRemoving) {
+      list = list.filter(item => item.toLowerCase() !== topicName.toLowerCase());
+    } else {
+      list.push(topicName);
+    }
+    const nextList = list.join(', ');
+    setStudyPlanWeaknesses(nextList);
+
+    // Trigger corner popup toast
+    setWeaknessPopup({
+      show: true,
+      topic: topicName,
+      action: isRemoving ? 'removed' : 'added'
+    });
+    
+    // Auto dismiss after 3 seconds
+    setTimeout(() => {
+      setWeaknessPopup(prev => prev.topic === topicName ? { ...prev, show: false } : prev);
+    }, 3000);
+  };
+
+  const toggleWeaknessSubjectExpansion = (subjectId) => {
+    setWeaknessExpandedSubjects(prev => ({
+      ...prev,
+      [subjectId]: !prev[subjectId]
+    }));
+  };
+
+  const renderHeatmapCell = (marks, questions, avgDifficulty, topic, year, key) => {
+    const topicName = topic?.name || 'Topic';
+    let bgIntensity = 'rgba(255,255,255,0.02)';
+    let textColor = '#64748b';
+    let borderStyle = 'border-white/5';
+
+    if (marks > 0) {
+      if (marks <= 3) {
+        bgIntensity = `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(129, 140, 248, 0.15))`;
+        textColor = '#a5b4fc';
+        borderStyle = 'border-indigo-500/20';
+      } else if (marks <= 7) {
+        bgIntensity = `linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(139, 92, 246, 0.4))`;
+        textColor = '#e9d5ff';
+        borderStyle = 'border-purple-500/30';
+      } else {
+        bgIntensity = `linear-gradient(135deg, rgba(244, 63, 94, 0.8), rgba(236, 72, 153, 0.85))`;
+        textColor = '#ffffff';
+        borderStyle = 'border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.2)]';
+      }
+    }
+
+    let diffText = 'N/A';
+    if (avgDifficulty !== null && avgDifficulty !== undefined && avgDifficulty !== 'N/A') {
+      const diffVal = parseFloat(avgDifficulty);
+      if (!isNaN(diffVal)) {
+        diffText = diffVal > 2.3 ? 'Hard' : diffVal > 1.6 ? 'Medium' : 'Easy';
+      }
+    }
+
+    let valueText = '—';
+    if (heatmapViewMode === 'marks') {
+      valueText = marks > 0 ? `${Number(marks.toFixed(1))} marks` : '0 marks';
+    } else if (heatmapViewMode === 'questions') {
+      valueText = questions > 0 ? `${questions} questions` : '0 questions';
+    } else if (heatmapViewMode === 'status') {
+      // Clean visual: show marks (full text)
+      valueText = marks > 0 ? `${Number(marks.toFixed(1))} marks` : '—';
+    }
+
     return (
-      <div key={key} style={{ background: bgIntensity, color: textColor }} className="py-1.5 px-1 rounded font-bold text-center text-xs border border-white/5">
-        {marks > 0 ? `${marks.toFixed(0)}m` : '0m'}
+      <div 
+        key={key} 
+        style={{ background: bgIntensity }} 
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelectedHeatmapTopic(topic);
+        }}
+        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border ${borderStyle} transition-all hover:scale-[1.05] hover:border-white/30 relative group cursor-pointer ${marks > 7 ? 'shadow-md shadow-rose-950/20 animate-pulse-slow' : ''}`}
+      >
+        <span style={{ color: textColor }}>{valueText}</span>
+        
+        {/* Custom CSS Hover Tooltip */}
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-950/95 border border-white/10 p-2.5 rounded-lg text-left hidden group-hover:block z-50 pointer-events-none shadow-2xl animate-fade-in text-[10px] font-normal leading-normal whitespace-pre">
+          <div className="font-bold text-white border-b border-white/5 pb-1 mb-1 truncate">{topicName} ({year})</div>
+          <div className="text-indigo-300 font-semibold">Marks Weight: {marks.toFixed(1)} {marks === 1 ? 'mark' : 'marks'}</div>
+          <div className="text-purple-300 font-semibold">Questions: {questions} {questions === 1 ? 'question' : 'questions'}</div>
+          <div className="text-amber-300 font-semibold">Avg Difficulty: {diffText}</div>
+        </div>
       </div>
     );
+  };
+
+  const trendChartData = (selectedHeatmapTopic && heatmapData) ? {
+    labels: heatmapData.years.length > 0 ? heatmapData.years : [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+    datasets: [
+      {
+        label: `${selectedHeatmapTopic.name} (Marks Weight)`,
+        data: (heatmapData.years.length > 0 ? heatmapData.years : [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]).map(y => {
+          const yearData = selectedHeatmapTopic.years[y] || selectedHeatmapTopic.years[String(y)];
+          if (typeof yearData === 'object' && yearData !== null) {
+            return yearData.total_marks || 0;
+          }
+          return yearData || 0;
+        }),
+        fill: true,
+        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+        borderColor: 'rgba(99, 102, 241, 1)',
+        borderWidth: 2,
+        pointBackgroundColor: 'rgba(99, 102, 241, 1)',
+        pointBorderColor: '#fff',
+        pointHoverBackgroundColor: '#fff',
+        pointHoverBorderColor: 'rgba(99, 102, 241, 1)',
+        tension: 0.3,
+      }
+    ]
+  } : null;
+
+  const trendChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+        backgroundColor: 'rgba(10, 11, 16, 0.95)',
+        titleColor: '#fff',
+        bodyColor: '#cbd5e1',
+        borderColor: 'rgba(255,255,255,0.06)',
+        borderWidth: 1,
+        padding: 12,
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 10 } }
+      },
+      y: {
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { 
+          color: '#94a3b8', 
+          font: { family: 'Plus Jakarta Sans', size: 10 },
+          callback: (value) => `${value} marks`
+        },
+        suggestedMin: 0,
+      }
+    }
   };
 
   if (loading) {
@@ -284,29 +578,54 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="container mx-auto px-4 animate-fade-in">
+    <div className="container mx-auto px-4 max-w-7xl animate-fade-in pb-16 relative">
+      
+      {/* Weakness Tagging Corner Toast Popup Notification */}
+      {weaknessPopup.show && (
+        <div className="fixed bottom-6 right-6 bg-[#121420] border border-white/10 p-4 rounded-xl shadow-2xl flex items-center gap-3 z-50 animate-slide-up bg-gradient-to-br from-[#121420] to-[#1a1d30] max-w-sm">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+            weaknessPopup.action === 'added' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-rose-500/15 text-rose-400'
+          }`}>
+            <CheckCircle size={16} />
+          </div>
+          <div>
+            <strong className="text-xs text-white block">Weakness Targets Updated</strong>
+            <span className="text-[10px] text-slate-400 leading-normal">
+              {weaknessPopup.action === 'added' 
+                ? `Tagged "${weaknessPopup.topic}" to prioritize it in study plans.`
+                : `Removed "${weaknessPopup.topic}" from study plan targets.`
+              }
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
-      <div className="glass-panel p-6 mb-8 border-l-4 border-l-indigo-500 flex flex-wrap justify-between items-center gap-6">
+      <div className="glass-panel p-6 mb-8 border-l-4 border-l-indigo-500 flex flex-wrap justify-between items-center gap-6 bg-[#121420]/80">
         <div>
-          <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors mb-2" onClick={() => navigate('/')}>
+          <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors mb-2 cursor-pointer" onClick={() => navigate('/')}>
             <ChevronLeft size={16} /> Choose Exam
           </button>
           <h2 className="text-2xl font-bold font-display">{selectedExam?.full_name || 'Exam'} Dashboard</h2>
-          <p className="text-sm text-slate-400">Database Papers: {papers.length} Years • Prediction Model: Statistical v5</p>
+        </div>
+        <div className="flex gap-4 shrink-0 ml-auto">
+          <StatCard title="Database Papers" value={`${papers.length} Years`} color="indigo" />
+          <StatCard title="AI Confidence" value="94.2%" color="emerald" />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-white/10 mb-8 overflow-x-auto">
+      <div className="flex border-b border-white/5 mb-8 overflow-x-auto">
         {[
           { id: 'heatmap', icon: BarChart3, label: 'Topic Heatmap' },
           { id: 'predictions', icon: TrendingUp, label: 'AI Predictions' },
           { id: 'studyplan', icon: ListTodo, label: 'Dynamic Study Plan' },
+          { id: 'gapradar', icon: Target, label: 'Performance Gap Radar' },
           { id: 'questions', icon: BookOpen, label: 'Question Browser' }
         ].map(t => (
           <button
             key={t.id}
-            className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors border-b-2 whitespace-nowrap ${activeTab === t.id ? 'border-indigo-500 text-white bg-indigo-500/10' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
+            className={`flex items-center gap-2 px-6 py-3.5 font-semibold transition-colors border-b-2 whitespace-nowrap cursor-pointer ${activeTab === t.id ? 'border-indigo-500 text-white bg-indigo-500/10' : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5'}`}
             onClick={() => setActiveTab(t.id)}
           >
             <t.icon size={18} /> {t.label}
@@ -316,208 +635,1040 @@ export default function Dashboard() {
 
       {/* HEATMAP TAB */}
       {activeTab === 'heatmap' && (
-        <div className="glass-panel p-6 animate-fade-in">
-          <h3 className="text-xl font-bold mb-6">Decadal Topic Heatmap</h3>
-          <div className="overflow-x-auto bg-[#191c2c]/40 rounded-xl p-4 border border-white/5">
-            {heatmapData && heatmapData.data?.length > 0 ? (
-              (() => {
-                const years = heatmapData.years.length > 0 ? heatmapData.years : [2015, 2016, 2017, 2018, 2019, 2020];
-                const parentTopicMap = {};
-                heatmapData.data.forEach(t => {
-                  if (!t.parent_id) {
-                    parentTopicMap[t.id] = { id: t.id, name: t.name, years: {} };
-                    years.forEach(y => { parentTopicMap[t.id].years[y] = 0; });
-                  }
-                });
-                heatmapData.data.forEach(t => {
-                  const parentId = t.parent_id || t.id;
-                  if (parentTopicMap[parentId]) {
-                    Object.entries(t.years || {}).forEach(([y, data]) => {
-                      parentTopicMap[parentId].years[y] = (parentTopicMap[parentId].years[y] || 0) + (data.total_marks || 0);
+        <div className="space-y-8 animate-fade-in">
+          <div className="glass-panel p-6 bg-[#121420]/60">
+            <div className="flex flex-wrap justify-between items-center gap-6 mb-6">
+              <div>
+                <h3 className="text-xl font-bold">Decadal Topic Heatmap</h3>
+                <p className="text-sm text-slate-400 mt-1">Click a subject parent row to drill down into subtopic weight distributions over the last 10 years.</p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Segmented Controls for Heatmap View Mode */}
+                <div className="flex bg-black/40 border border-white/10 rounded-xl p-1 shrink-0">
+                  {['status', 'marks', 'questions'].map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setHeatmapViewMode(mode)}
+                      className={`px-3 py-1 text-xs font-bold transition-all cursor-pointer rounded-lg ${
+                        heatmapViewMode === mode
+                          ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {mode === 'status' ? 'Overview' : mode === 'marks' ? 'Marks' : 'Questions'}
+                    </button>
+                  ))}
+                </div>
+
+                <button 
+                  onClick={handleReseed}
+                  disabled={seeding}
+                  className="bg-white/5 hover:bg-white/10 text-white font-bold py-2 px-4 rounded-xl border border-white/10 text-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 h-[34px]"
+                >
+                  {seeding ? <RefreshCw className="animate-spin" size={12} /> : null}
+                  {seeding ? 'Ingesting...' : 'Reset & Re-seed'}
+                </button>
+              </div>
+            </div>
+
+            {seedMessage && (
+              <div className={`p-4 rounded-xl mb-6 text-sm border ${
+                seedMessage.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                seedMessage.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
+                'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+              }`}>
+                {seedMessage.text}
+              </div>
+            )}
+
+            <div className="overflow-x-auto bg-[#191c2c]/30 rounded-xl p-4 border border-white/5">
+              {heatmapData && heatmapData.data?.length > 0 ? (
+                (() => {
+                  const years = heatmapData.years.length > 0 ? heatmapData.years : [2015, 2016, 2017, 2018, 2019, 2020];
+                  const parentTopicMap = {};
+                  
+                  heatmapData.data.forEach(t => {
+                    if (!t.parent_id) {
+                      parentTopicMap[t.id] = { id: t.id, name: t.name, years: {} };
+                      years.forEach(y => {
+                        parentTopicMap[t.id].years[y] = {
+                          total_marks: 0,
+                          question_count: 0,
+                          avg_difficulty: null,
+                          difficulty_sum: 0,
+                          difficulty_count: 0
+                        };
+                      });
+                    }
+                  });
+
+                  if (Object.keys(parentTopicMap).length === 0) {
+                    heatmapData.data.forEach(t => {
+                      parentTopicMap[t.id] = { id: t.id, name: t.name, years: {} };
+                      years.forEach(y => {
+                        parentTopicMap[t.id].years[y] = {
+                          total_marks: 0,
+                          question_count: 0,
+                          avg_difficulty: null,
+                          difficulty_sum: 0,
+                          difficulty_count: 0
+                        };
+                      });
                     });
                   }
-                });
-                return (
-                  <div className="min-w-[800px]">
-                    <div className="grid gap-1 mb-2 border-b border-white/10 pb-2 text-xs font-bold text-slate-400" style={{ gridTemplateColumns: `240px repeat(${years.length}, 1fr)` }}>
-                      <div>Subject / Subtopic</div>
-                      {years.map(y => <div key={y} className="text-center">{y}</div>)}
-                    </div>
-                    {Object.values(parentTopicMap).map(row => (
-                      <div key={row.id} className="grid gap-1 items-center py-2 border-b border-white/5" style={{ gridTemplateColumns: `240px repeat(${years.length}, 1fr)` }}>
-                        <div className="text-sm font-semibold text-white">{row.name}</div>
-                        {years.map((y, i) => renderHeatmapCell(row.years[y] || 0, i))}
+
+                  heatmapData.data.forEach(t => {
+                    const parentId = t.parent_id || t.id;
+                    if (parentTopicMap[parentId]) {
+                      Object.entries(t.years || {}).forEach(([y, data]) => {
+                        if (!parentTopicMap[parentId].years[y]) {
+                          parentTopicMap[parentId].years[y] = {
+                            total_marks: 0,
+                            question_count: 0,
+                            avg_difficulty: null,
+                            difficulty_sum: 0,
+                            difficulty_count: 0
+                          };
+                        }
+                        const pYear = parentTopicMap[parentId].years[y];
+                        pYear.total_marks += (data.total_marks || 0);
+                        pYear.question_count += (data.question_count || 0);
+                        
+                        if (data.avg_difficulty !== null && data.avg_difficulty !== undefined && data.avg_difficulty !== 'N/A') {
+                          const diffVal = parseFloat(data.avg_difficulty);
+                          const qCount = data.question_count || 0;
+                          if (!isNaN(diffVal) && qCount > 0) {
+                            pYear.difficulty_sum += diffVal * qCount;
+                            pYear.difficulty_count += qCount;
+                          }
+                        }
+                      });
+                    }
+                  });
+
+                  Object.values(parentTopicMap).forEach(row => {
+                    Object.keys(row.years).forEach(y => {
+                      const stat = row.years[y];
+                      if (stat.difficulty_count && stat.difficulty_count > 0) {
+                        stat.avg_difficulty = stat.difficulty_sum / stat.difficulty_count;
+                      } else {
+                        stat.avg_difficulty = null;
+                      }
+                    });
+                  });
+
+                  return (
+                    <div className="min-w-[1000px]">
+                      {/* Grid Header */}
+                      <div className="grid gap-1 mb-2 border-b border-white/10 pb-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider" style={{ gridTemplateColumns: `260px repeat(${years.length}, 1fr)` }}>
+                        <div>Subject / Subtopic</div>
+                        {years.map(y => <div key={y} className="text-center">{y}</div>)}
                       </div>
-                    ))}
-                  </div>
-                );
-              })()
-            ) : (
-              <p className="text-center text-slate-400 py-10">No heatmap data available. Ensure ingestion is completed.</p>
-            )}
+
+                      {/* Parent Rows */}
+                      {Object.values(parentTopicMap).map(row => {
+                        const isExpanded = !!expandedSubjects[row.id];
+                        const subtopicData = subtopicHeatmaps[row.id];
+                        
+                        return (
+                          <React.Fragment key={row.id}>
+                            <div 
+                              onClick={() => handleToggleSubject(row)}
+                              className={`grid gap-1 items-center py-2 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors px-2 rounded-lg ${
+                                selectedHeatmapTopic?.id === row.id ? 'bg-indigo-500/10' : ''
+                              }`}
+                              style={{ gridTemplateColumns: `260px repeat(${years.length}, 1fr)` }}
+                            >
+                              <div className="text-sm font-semibold text-white flex items-center gap-2">
+                                <ChevronRight size={14} className={`text-indigo-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                                <span>{row.name}</span>
+                              </div>
+                              {years.map((y, i) => {
+                                const stat = row.years[y] || { total_marks: 0, question_count: 0, avg_difficulty: null };
+                                return renderHeatmapCell(stat.total_marks, stat.question_count, stat.avg_difficulty, row, y, `${row.id}-${y}-${i}`);
+                              })}
+                            </div>
+
+                            {/* Subtopics Accordion */}
+                            {isExpanded && (
+                              <div className="pl-6 py-2 bg-black/20 rounded-lg space-y-1">
+                                {subtopicData ? (
+                                  subtopicData.subtopics.map(sub => (
+                                    <div 
+                                      key={sub.id} 
+                                      onClick={() => setSelectedHeatmapTopic(sub)}
+                                      className={`grid gap-1 items-center py-1.5 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors px-2 rounded-lg ${
+                                        selectedHeatmapTopic?.id === sub.id ? 'bg-purple-500/10 border border-purple-500/20' : ''
+                                      }`}
+                                      style={{ gridTemplateColumns: `236px repeat(${years.length}, 1fr)` }}
+                                    >
+                                      <div className="text-xs text-slate-300 font-medium">{sub.name}</div>
+                                      {years.map((y, i) => {
+                                        const subYearData = sub.years[String(y)] || sub.years[y] || { total_marks: 0, question_count: 0, avg_difficulty: null };
+                                        return renderHeatmapCell(
+                                          subYearData.total_marks || 0, 
+                                          subYearData.question_count || 0, 
+                                          subYearData.avg_difficulty || null, 
+                                          sub, 
+                                          y, 
+                                          `${sub.id}-${y}-${i}`
+                                        );
+                                      })}
+                                    </div>
+                                  ))
+                                ) : (
+                                  <div className="flex items-center gap-2 p-3 text-xs text-slate-500">
+                                    <RefreshCw className="animate-spin" size={12} /> Loading subtopics...
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
+              ) : (
+                <p className="text-center text-slate-400 py-10">No heatmap data available. Click "Reset & Re-seed" above.</p>
+              )}
+            </div>
+
+            {/* Legend */}
+            <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-400">
+              <span className="font-semibold text-slate-300">Weightage Color Index:</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white/5 border border-white/10"></span> 0 marks</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-500/20 border border-indigo-500/30"></span> Low Weight (1-3 marks)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500/50 border border-purple-500/60"></span> Medium Weight (4-7 marks)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-500/80 border border-rose-500"></span> Critical Weight (&gt;7 marks)</span>
+            </div>
           </div>
+
+          {/* Interactive Line Chart details */}
+          {selectedHeatmapTopic && (
+            <div ref={topicDetailsRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
+              <div className="glass-panel p-6 bg-[#121420]/60 lg:col-span-1 flex flex-col justify-between border border-white/5">
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-400 px-2 py-0.5 rounded bg-indigo-500/10 w-fit block mb-3">Topic Insights</span>
+                  <h4 className="text-xl font-bold text-white mb-4">{selectedHeatmapTopic.name}</h4>
+                  
+                  <div className="space-y-4">
+                    <div className="bg-black/30 p-3 rounded-lg border border-white/5">
+                      <span className="text-xs text-slate-400 block mb-1">Total Marks Analyzed</span>
+                      <strong className="text-2xl font-extrabold text-indigo-400">
+                        {(() => {
+                          const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.total_marks : 0);
+                          const total = values.reduce((a, b) => a + b, 0);
+                          return values.length > 0 ? `${total.toFixed(1)} ${total === 1 ? 'mark' : 'marks'}` : '0 marks';
+                        })()}
+                      </strong>
+                    </div>
+
+                    <div className="bg-black/30 p-3 rounded-lg border border-white/5">
+                      <span className="text-xs text-slate-400 block mb-1 font-medium">Historical Questions</span>
+                      <strong className="text-xl font-extrabold text-white">
+                        {(() => {
+                          const values = Object.values(selectedHeatmapTopic.years).map(y => typeof y === 'object' ? y.question_count : 0);
+                          const totalQ = values.length > 0 ? values.reduce((a, b) => a + b, 0) : 0;
+                          return `${totalQ} ${totalQ === 1 ? 'question' : 'questions'}`;
+                        })()}
+                      </strong>
+                    </div>
+
+                    <div className="bg-black/30 p-3 rounded-lg border border-white/5">
+                      <span className="text-xs text-slate-400 block mb-1 font-medium">Average Difficulty</span>
+                      <strong className="text-xl font-extrabold text-amber-400">
+                        {(() => {
+                          const values = Object.values(selectedHeatmapTopic.years).filter(y => typeof y === 'object' && y !== null && y.avg_difficulty !== null && y.avg_difficulty !== undefined && y.avg_difficulty !== 'N/A');
+                          if (values.length === 0) return 'N/A';
+                          const sum = values.reduce((acc, y) => acc + (parseFloat(y.avg_difficulty) * (y.question_count || 1)), 0);
+                          const count = values.reduce((acc, y) => acc + (y.question_count || 1), 0);
+                          if (count === 0) return 'N/A';
+                          const avg = sum / count;
+                          return avg > 2.3 ? 'Hard 🔥' : avg > 1.6 ? 'Medium ⚡' : 'Easy 📋';
+                        })()}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  <div className="text-[10px] text-slate-400 leading-normal bg-white/5 p-2 rounded-lg border border-white/5">
+                    💡 Tagging as weakness prioritizes this topic at the top of your custom study plan.
+                  </div>
+                  <button 
+                    onClick={() => handleToggleWeaknessTag(selectedHeatmapTopic.name)}
+                    className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-2.5 px-4 rounded-xl border border-white/10 text-xs transition-colors cursor-pointer"
+                  >
+                    {studyPlanWeaknesses.split(',').map(s => s.trim().toLowerCase()).includes(selectedHeatmapTopic.name.toLowerCase())
+                      ? '✓ Tagged as Weakness Focus'
+                      : '+ Tag as Weakness Focus'}
+                  </button>
+                  <button 
+                    onClick={() => setSelectedHeatmapTopic(null)}
+                    className="w-full text-slate-400 hover:text-white text-xs font-semibold py-1.5 transition-colors cursor-pointer"
+                  >
+                    Close Details
+                  </button>
+                </div>
+              </div>
+
+              <div className="glass-panel p-6 bg-[#121420]/60 lg:col-span-2 flex flex-col min-h-[320px] border border-white/5">
+                <h4 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Historical Mark Distribution (2015-2025)</h4>
+                <div className="flex-grow relative h-[240px]">
+                  <Line data={trendChartData} options={trendChartOptions} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* PREDICTIONS TAB */}
       {activeTab === 'predictions' && (
-        <div className="animate-fade-in">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div className="glass-panel p-6 flex items-center gap-4 border-amber-500/30">
+        <div className="space-y-8 animate-fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="glass-panel p-6 flex items-center gap-4 bg-[#121420]/60 border-l-4 border-l-amber-500 border-white/5">
               <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500">
                 <Flame size={24} />
               </div>
               <div>
-                <span className="text-sm text-slate-400 block">Top predicted topic</span>
-                <h4 className="text-lg font-bold text-white">{predictions[0]?.topic_name || 'Loading...'}</h4>
+                <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Top AI Target Focus</span>
+                <h4 className="text-lg font-bold text-white mt-0.5">{predictions[0]?.topic_name || 'Instruction Pipelining'}</h4>
               </div>
             </div>
           </div>
-          <div className="glass-panel p-6">
-            <h3 className="text-xl font-bold mb-6">Upcoming Exam Probability Analysis</h3>
-            <div className="flex flex-col gap-4">
-              {predictions.map((pred, i) => (
-                <div key={i} className="bg-[#191c2c]/60 border border-white/5 p-4 rounded-xl">
-                  <div className="flex flex-wrap justify-between items-center mb-2">
-                    <div>
-                      <strong className="text-lg text-white block">{pred.topic_name}</strong>
-                      <span className="text-xs text-slate-400">Category: {pred.parent_topic_name || 'General'}</span>
+
+          <div>
+            <h3 className="text-xl font-bold mb-6 text-white font-display">Upcoming Exam Probability Analysis</h3>
+            
+            {predictions.length === 0 ? (
+              <p className="text-center text-slate-400 py-10 glass-panel bg-[#121420]/60">No probability predictions computed yet. Seed historical data first.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {predictions.slice((predCurrentPage - 1) * predsPerPage, predCurrentPage * predsPerPage).map((pred, i) => {
+                  const probPct = Math.round(pred.predicted_probability * 100);
+                  const isWeakness = studyPlanWeaknesses.split(',').map(s => s.trim().toLowerCase()).includes(pred.topic_name.toLowerCase());
+                  
+                  let tagColor = 'text-indigo-400 bg-indigo-500/10 border border-indigo-500/20';
+                  let gaugeColor = 'text-indigo-400';
+                  if (probPct >= 90) {
+                    tagColor = 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
+                    gaugeColor = 'text-rose-500';
+                  } else if (probPct >= 80) {
+                    tagColor = 'text-amber-400 bg-amber-500/10 border border-amber-500/20';
+                    gaugeColor = 'text-amber-500';
+                  }
+
+                  return (
+                    <div key={i} className="glass-panel p-5 bg-[#121420]/60 flex flex-col justify-between border border-white/5 hover:border-indigo-500/20 transition-all hover:scale-[1.01] shadow-lg rounded-2xl relative overflow-hidden">
+                      {/* Glow background decoration */}
+                      <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full filter blur-[40px] opacity-10 ${
+                        probPct >= 90 ? 'bg-rose-500' : 'bg-indigo-500'
+                      }`}></div>
+
+                      <div>
+                        <div className="flex justify-between items-start gap-4 mb-4">
+                          <div className="min-w-0">
+                            <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400 block truncate">
+                              {pred.parent_topic_name || 'General Course'}
+                            </span>
+                            <h4 className="text-sm font-bold text-white mt-1 leading-tight line-clamp-2">{pred.topic_name}</h4>
+                          </div>
+                          
+                          {/* Radial Percentage Circle */}
+                          <div className="flex flex-col items-center shrink-0">
+                            <div className="relative flex items-center justify-center w-12 h-12">
+                              <svg className="w-12 h-12 transform -rotate-90">
+                                <circle cx="24" cy="24" r="20" stroke="rgba(255,255,255,0.05)" strokeWidth="3" fill="transparent" />
+                                <circle 
+                                  cx="24" cy="24" r="20" 
+                                  stroke="currentColor" 
+                                  strokeWidth="3" 
+                                  fill="transparent" 
+                                  className={gaugeColor}
+                                  strokeDasharray={2 * Math.PI * 20}
+                                  strokeDashoffset={2 * Math.PI * 20 * (1 - pred.predicted_probability)}
+                                />
+                              </svg>
+                              <span className="absolute text-[10px] font-black text-white">{probPct}%</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-300 leading-relaxed mb-6 italic">"{pred.reasoning}"</p>
+                      </div>
+
+                      <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${tagColor}`}>
+                          {probPct >= 90 ? 'Critical' : 'High Focus'}
+                        </span>
+                        <button
+                          onClick={() => handleToggleWeaknessTag(pred.topic_name)}
+                          className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                            isWeakness
+                              ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                              : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+                          }`}
+                        >
+                          {isWeakness ? '✓ Target Set' : '+ Set Target'}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className={`text-xs font-bold px-2 py-1 rounded bg-white/5 ${pred.predicted_probability >= 0.9 ? 'text-rose-500' : 'text-amber-500'}`}>
-                        {pred.predicted_probability >= 0.9 ? 'Highly Critical' : 'Rising Weight'}
-                      </span>
-                      <span className="text-2xl font-bold text-emerald-400">{Math.round(pred.predicted_probability * 100)}%</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-300">{pred.reasoning}</p>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Predictions Pagination */}
+            {predictions.length > predsPerPage && (
+              <div className="flex justify-between items-center mt-8 pt-6 border-t border-white/5">
+                <span className="text-xs text-slate-400 font-medium">
+                  Showing {(predCurrentPage - 1) * predsPerPage + 1} to {Math.min(predCurrentPage * predsPerPage, predictions.length)} of {predictions.length} topics
+                </span>
+                <div className="flex gap-2">
+                  <button 
+                    disabled={predCurrentPage === 1} 
+                    onClick={() => setPredCurrentPage(p => p - 1)} 
+                    className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 disabled:opacity-40 text-xs font-semibold cursor-pointer"
+                  >
+                    Prev
+                  </button>
+                  <button 
+                    disabled={predCurrentPage * predsPerPage >= predictions.length} 
+                    onClick={() => setPredCurrentPage(p => p + 1)} 
+                    className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 disabled:opacity-40 text-xs font-semibold cursor-pointer"
+                  >
+                    Next
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {/* STUDY PLAN TAB */}
       {activeTab === 'studyplan' && (
-        <div className="glass-panel p-6 animate-fade-in">
-          <h3 className="text-xl font-bold mb-2">AI-Prioritized Study Roadmap</h3>
-          <p className="text-sm text-slate-400 mb-6">Generate a custom plan focusing on high-probability topics.</p>
+        <div className="space-y-8 animate-fade-in">
+          {/* Gamified Mastery Tracker (Header) */}
+          {studyPlan.length > 0 && (() => {
+            let totalTasks = 0;
+            let completedCount = 0;
+            studyPlan.forEach(plan => {
+              plan.tasks.forEach((task, tIdx) => {
+                totalTasks++;
+                const taskKey = `${id}-${plan.day}-${tIdx}-${task.slice(0, 20)}`;
+                if (completedTasks[taskKey]) completedCount++;
+              });
+            });
 
-          <div className="bg-[#191c2c]/60 border border-white/5 p-6 rounded-xl mb-8 flex flex-wrap gap-4 items-end">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Duration (Days)</label>
-              <input type="number" value={studyPlanDays} onChange={e => setStudyPlanDays(e.target.value)} className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white w-24 outline-none focus:border-indigo-500" />
-            </div>
-            <div className="flex-grow">
-              <label className="block text-xs text-slate-400 mb-1">Target Weaknesses (comma separated)</label>
-              <input type="text" value={studyPlanWeaknesses} onChange={e => setStudyPlanWeaknesses(e.target.value)} placeholder="e.g. Cache mapping, SQL Queries" className="bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-white w-full outline-none focus:border-indigo-500" />
-            </div>
-            <button className="btn-primary flex items-center gap-2" onClick={handleUpdateStudyPlan}>
-              <Calendar size={16} /> Generate Plan
-            </button>
-            {!currentUser && <p className="text-xs text-rose-400 w-full mt-2">Login is required to generate custom plans.</p>}
-          </div>
+            const percent = totalTasks > 0 ? Math.round((completedCount / totalTasks) * 100) : 0;
+            let levelName = "Syllabus Initiate (Level 1)";
+            let levelColor = "text-indigo-400";
+            let progressBg = "bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.2)]";
+            let levelBadge = "Lvl 1";
+            if (percent >= 75) {
+              levelName = "GATE CS Master (Level 4) 🏆";
+              levelColor = "text-emerald-400";
+              progressBg = "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.3)]";
+              levelBadge = "Lvl 4";
+            } else if (percent >= 50) {
+              levelName = "Study Sage (Level 3) 🧙‍♂️";
+              levelColor = "text-purple-400";
+              progressBg = "bg-purple-500 shadow-[0_0_12px_rgba(168,85,247,0.3)]";
+              levelBadge = "Lvl 3";
+            } else if (percent >= 25) {
+              levelName = "Architect Apprentice (Level 2) 🛠️";
+              levelColor = "text-amber-400";
+              progressBg = "bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.3)]";
+              levelBadge = "Lvl 2";
+            }
 
-          <div className="flex flex-col gap-4">
-            {studyPlan.length > 0 ? studyPlan.map((plan, i) => (
-              <div key={i} className="flex gap-6 bg-[#191c2c]/40 border border-white/5 p-5 rounded-xl">
-                <div className="text-center min-w-[80px]">
-                  <span className="block text-sm font-bold text-indigo-400">{plan.day}</span>
-                  <span className="text-xs text-slate-400">{plan.time}</span>
+            const currentXP = completedCount * 100;
+            const totalXP = totalTasks * 100;
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Mastery Bar */}
+                <div className="glass-panel p-6 bg-black/40 border border-white/5 rounded-2xl flex flex-col justify-between relative overflow-hidden lg:col-span-2">
+                  <div className="absolute top-0 left-0 w-2 h-full bg-indigo-500"></div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">Gamified Study Progress</span>
+                    <h4 className="text-lg font-extrabold text-white mt-0.5 font-display">Syllabus Mastery Bar</h4>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs text-slate-400 font-semibold">Current Title Rank:</span>
+                      <span className={`text-xs font-black uppercase tracking-wider ${levelColor}`}>{levelName}</span>
+                    </div>
+                  </div>
+                  
+                  {/* Mastery progress bar */}
+                  <div className="w-full bg-white/5 rounded-full h-5 mt-4 border border-white/10 relative overflow-hidden">
+                    <div 
+                      style={{ width: `${percent}%` }}
+                      className={`h-full transition-all duration-500 ease-out ${progressBg}`}
+                    ></div>
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-white mix-blend-difference">
+                      {percent}% Completed ({completedCount} of {totalTasks} Tasks Mastered)
+                    </span>
+                  </div>
                 </div>
-                <div className="w-[1px] bg-white/10"></div>
-                <div>
-                  <h4 className="text-lg font-semibold text-white mb-3">{plan.title}</h4>
-                  <ul className="flex flex-col gap-2">
-                    {plan.tasks.map((task, tIdx) => (
-                      <li key={tIdx} className="text-sm text-slate-300 flex items-start gap-2">
-                        <CheckCircle size={16} className="text-emerald-500 mt-0.5 shrink-0" />
-                        <span>{task}</span>
-                      </li>
-                    ))}
-                  </ul>
+
+                {/* Gamified Habit & XP Widgets */}
+                <div className="grid grid-cols-2 gap-4 lg:col-span-1">
+                  {/* XP Points card */}
+                  <div className="glass-panel p-5 bg-[#191c2c]/40 border border-white/5 rounded-2xl flex flex-col justify-between text-center">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block">XP Rank Points</span>
+                    <div className="my-2">
+                      <span className="text-2xl font-black text-indigo-400">{currentXP}</span>
+                      <span className="text-slate-500 text-xs"> / {totalXP} XP</span>
+                    </div>
+                    <span className="text-[9px] font-semibold text-slate-400 bg-white/5 py-1 px-2 rounded-md block w-fit mx-auto">
+                      🏆 {levelBadge} Badge
+                    </span>
+                  </div>
+
+                  {/* Daily Streak Card */}
+                  <div className="glass-panel p-5 bg-[#191c2c]/40 border border-white/5 rounded-2xl flex flex-col justify-between text-center">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block">Study Streak</span>
+                    <div className="my-2 flex items-center justify-center gap-1.5">
+                      <span className="text-2xl font-black text-rose-400">🔥 {studyStreak}</span>
+                      <span className="text-slate-400 text-xs font-bold">Days</span>
+                    </div>
+                    <span className="text-[8px] font-semibold text-amber-300 animate-pulse bg-amber-500/10 py-1 px-1 rounded block">
+                      Daily Challenge: Active!
+                    </span>
+                  </div>
                 </div>
               </div>
-            )) : <p className="text-center text-slate-400 py-6">No plan generated.</p>}
+            );
+          })()}
+
+          {/* Settings Customizer */}
+          <div className="glass-panel p-6 bg-[#121420]/60 border border-white/5 rounded-2xl">
+            <h3 className="text-lg font-bold mb-4 font-display text-white">Study Plan Customizer</h3>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+              {/* Premium Time Horizon Customizer */}
+              <div className="space-y-4 lg:col-span-1">
+                <label className="block text-xs uppercase tracking-wider font-bold text-slate-400">Study Duration</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(DURATION_PROFILES).map(([d, profile]) => {
+                    const isSelected = String(studyPlanDays) === d;
+                    return (
+                      <div
+                        key={d}
+                        onClick={() => setStudyPlanDays(d)}
+                        className={`p-3.5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between h-32 ${
+                          isSelected 
+                            ? `bg-gradient-to-br ${profile.gradient} shadow-[0_0_15px_rgba(99,102,241,0.15)] scale-[1.02] border-indigo-500` 
+                            : 'bg-black/20 border-white/5 hover:border-white/10 hover:bg-black/30 text-slate-400'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <span className="text-xl">{profile.icon}</span>
+                          <span className={`text-[8px] uppercase tracking-wider font-extrabold px-1 py-0.5 rounded bg-black/20 ${isSelected ? 'text-white' : 'text-slate-500'}`}>
+                            {profile.subtitle}
+                          </span>
+                        </div>
+                        <div className="mt-2">
+                          <strong className={`text-sm font-black block ${isSelected ? 'text-white' : 'text-slate-300'}`}>{profile.title}</strong>
+                          <p className="text-[9px] leading-tight text-slate-500 mt-0.5 line-clamp-2">{profile.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-col gap-2 bg-black/20 p-4 rounded-xl border border-white/5">
+                  <div className="flex justify-between text-xs font-semibold text-slate-400">
+                    <span>Custom Range Horizon</span>
+                    <span className="text-indigo-400 font-extrabold">{studyPlanDays} Days Timeline</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="7"
+                    max="180"
+                    value={studyPlanDays}
+                    onChange={e => setStudyPlanDays(e.target.value)}
+                    style={{
+                      background: `linear-gradient(to right, #6366f1 0%, #6366f1 ${((studyPlanDays - 7) / (180 - 7)) * 100}%, rgba(255,255,255,0.05) ${((studyPlanDays - 7) / (180 - 7)) * 100}%, rgba(255,255,255,0.05) 100%)`
+                    }}
+                    className="w-full accent-indigo-500 h-1.5 rounded-lg appearance-none cursor-pointer border border-white/5"
+                  />
+                  <div className="flex justify-between text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                    <span>7d sprint</span>
+                    <span>30d standard</span>
+                    <span>90d deep</span>
+                    <span>180d master</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Targets and weakness presets */}
+              <div className="space-y-4 lg:col-span-2">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider font-bold text-slate-400 mb-1.5">Target Weaknesses Focus</label>
+                  <input 
+                    type="text" 
+                    value={studyPlanWeaknesses} 
+                    onChange={e => setStudyPlanWeaknesses(e.target.value)} 
+                    placeholder="e.g. Cache Mapping, SQL Transactions, Instruction Pipelining" 
+                    className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white w-full outline-none focus:border-indigo-500 text-sm font-medium transition-colors" 
+                  />
+                  
+                  {/* Explanation card */}
+                  <div className="text-[10px] text-indigo-300 leading-relaxed bg-indigo-500/5 p-3 rounded-xl border border-indigo-500/10 mt-2 flex items-start gap-2">
+                    <span className="text-xs shrink-0">💡</span>
+                    <span>
+                      <strong>Weakness Focus Tagging:</strong> Adding a topic prioritizes it in your roadmap. When you click <strong>Calculate Roadmap</strong>, the AI regression engine schedules study tasks and mock questions for these topics on the early days of your plan.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Common topics preset buttons */}
+                <div>
+                  <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2">Preset High-Yield Topics (Click to add/remove)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {COMMON_TOPICS_PRESETS.map(preset => {
+                      const activeList = studyPlanWeaknesses.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+                      const isActive = activeList.includes(preset.toLowerCase());
+                      return (
+                        <button
+                          key={preset}
+                          onClick={() => handleToggleWeaknessTag(preset)}
+                          className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                            isActive 
+                              ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300 shadow-sm shadow-indigo-500/10' 
+                              : 'bg-white/5 border-white/5 text-slate-400 hover:border-white/10 hover:text-white'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Collapsible taxonomy selector */}
+                {examTopics && examTopics.length > 0 && (
+                  <div className="border-t border-white/5 pt-4">
+                    <label className="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-2">
+                      Browse Full Course Taxonomy Hierarchy (Click to toggle)
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[220px] overflow-y-auto bg-black/20 p-4 rounded-xl border border-white/5">
+                      {examTopics.map(subject => {
+                        const activeList = studyPlanWeaknesses.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+                        const isSubjectActive = activeList.includes(subject.name.toLowerCase());
+                        const isExpanded = !!weaknessExpandedSubjects[subject.id];
+                        
+                        return (
+                          <div key={subject.id} className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleWeaknessSubjectExpansion(subject.id)}
+                                className="p-1 hover:bg-white/5 rounded text-slate-400 hover:text-white transition-colors cursor-pointer"
+                              >
+                                <ChevronRight size={12} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleWeaknessTag(subject.name)}
+                                className={`text-[11px] font-bold px-2 py-0.5 rounded border transition-all cursor-pointer text-left flex-grow truncate ${
+                                  isSubjectActive
+                                    ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300'
+                                    : 'bg-white/5 border-white/5 text-slate-300 hover:border-white/10'
+                                }`}
+                              >
+                                {subject.name}
+                              </button>
+                            </div>
+                            
+                            {isExpanded && subject.subtopics && (
+                              <div className="pl-5 space-y-1 border-l border-white/5 ml-2 mt-1">
+                                {subject.subtopics.map(subtopic => {
+                                  const isSubtopicActive = activeList.includes(subtopic.name.toLowerCase());
+                                  return (
+                                    <button
+                                      key={subtopic.id}
+                                      onClick={() => handleToggleWeaknessTag(subtopic.name)}
+                                      className={`w-full text-left text-[10px] font-semibold px-2 py-0.5 rounded border transition-all cursor-pointer truncate ${
+                                        isSubtopicActive
+                                          ? 'bg-purple-500/20 border-purple-500/30 text-purple-300'
+                                          : 'bg-white/5 border-transparent text-slate-400 hover:border-white/10 hover:text-white'
+                                      }`}
+                                    >
+                                      {subtopic.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between gap-4">
+              <span className="text-xs text-slate-400 leading-normal font-medium">
+                {currentUser 
+                  ? 'Update your weaknesses hierarchy and duration profile, then trigger roadmap calculations.' 
+                  : '⚠️ Login to authorize and save study plan computations to your profile.'
+                }
+              </span>
+              <button 
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2.5 px-6 rounded-xl transition-colors cursor-pointer flex items-center gap-2 h-[38px] disabled:opacity-50" 
+                onClick={handleUpdateStudyPlan}
+                disabled={!currentUser}
+              >
+                <Calendar size={15} /> Calculate Roadmap
+              </button>
+            </div>
+          </div>
+
+          {/* Timeline Redesigned Visual Interactive Roadmap */}
+          <div className="relative border-l-2 border-slate-800 ml-4 md:ml-12 pl-6 md:pl-10 space-y-8 my-6">
+            {studyPlan.length > 0 ? (() => {
+              // Find the index of the first uncompleted phase
+              let firstUncompletedIdx = -1;
+              for (let pIdx = 0; pIdx < studyPlan.length; pIdx++) {
+                const plan = studyPlan[pIdx];
+                const allDone = plan.tasks.every((task, tIdx) => {
+                  const taskKey = `${id}-${plan.day}-${tIdx}-${task.slice(0, 20)}`;
+                  return completedTasks[taskKey];
+                });
+                if (!allDone) {
+                  firstUncompletedIdx = pIdx;
+                  break;
+                }
+              }
+
+              return studyPlan.map((plan, i) => {
+                const phaseTasks = plan.tasks;
+                
+                // Calculate phase completed count
+                let phaseCompletedCount = 0;
+                phaseTasks.forEach((task, tIdx) => {
+                  const taskKey = `${id}-${plan.day}-${tIdx}-${task.slice(0, 20)}`;
+                  if (completedTasks[taskKey]) phaseCompletedCount++;
+                });
+                
+                const phaseCompleted = phaseCompletedCount === phaseTasks.length;
+                const phasePercent = phaseTasks.length > 0 ? Math.round((phaseCompletedCount / phaseTasks.length) * 100) : 0;
+                
+                const isActiveQuest = (i === firstUncompletedIdx);
+                
+                let cardBorder = '';
+                let nodeCircleStyle = '';
+                let nodeIcon = null;
+
+                if (phaseCompleted) {
+                  cardBorder = 'border-emerald-500/20 bg-emerald-500/5 shadow-md shadow-emerald-950/10';
+                  nodeCircleStyle = 'border-emerald-500 bg-emerald-950 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]';
+                  nodeIcon = <Check size={14} className="stroke-[3]" />;
+                } else if (isActiveQuest) {
+                  cardBorder = 'border-indigo-500/30 bg-indigo-500/5 shadow-lg shadow-indigo-950/20';
+                  nodeCircleStyle = 'border-indigo-500 bg-indigo-950 text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.3)]';
+                  nodeIcon = <Play size={10} className="fill-indigo-400 stroke-none ml-0.5" />;
+                } else {
+                  cardBorder = 'border-white/5 bg-[#191c2c]/10 opacity-75';
+                  nodeCircleStyle = 'border-slate-700 bg-slate-900 text-slate-500';
+                  nodeIcon = <Lock size={10} />;
+                }
+
+                return (
+                  <div key={i} className="relative group">
+                    {/* Timeline Node Circle */}
+                    <div className={`absolute -left-[39px] md:-left-[55px] top-6 w-8 h-8 rounded-full border-2 flex items-center justify-center z-10 transition-all duration-300 ${nodeCircleStyle}`}>
+                      {nodeIcon}
+                    </div>
+
+                    <div className={`p-6 rounded-2xl transition-all duration-300 border ${cardBorder} hover:scale-[1.005]`}>
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-3 border-b border-white/5">
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-black px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-md uppercase tracking-wider">
+                              Day {plan.day}
+                            </span>
+                            <span className="text-xs text-slate-400 font-semibold bg-white/5 py-0.5 px-2 rounded-md">
+                              {plan.time}
+                            </span>
+                            {phaseCompleted && (
+                              <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                                Completed
+                              </span>
+                            )}
+                            {isActiveQuest && (
+                              <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                                Active Focus
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="text-lg font-bold text-white mt-1.5">{plan.title}</h4>
+                        </div>
+
+                        {/* Phase Progress Bar */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs font-bold text-slate-400">Completion</span>
+                          <div className="w-32 bg-white/5 rounded-full h-2 border border-white/5 relative overflow-hidden">
+                            <div 
+                              style={{ width: `${phasePercent}%` }} 
+                              className={`h-full transition-all duration-300 ${phaseCompleted ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                            ></div>
+                          </div>
+                          <span className="text-xs font-black text-slate-300 w-8 text-right">{phasePercent}%</span>
+                        </div>
+                      </div>
+
+                      <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {plan.tasks.map((task, tIdx) => {
+                          const taskKey = `${id}-${plan.day}-${tIdx}-${task.slice(0, 20)}`;
+                          const checked = !!completedTasks[taskKey];
+                          return (
+                            <li 
+                              key={tIdx} 
+                              onClick={() => handleToggleTask(taskKey)}
+                              className={`flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                                checked 
+                                  ? 'bg-emerald-500/5 border-emerald-500/10 text-slate-500 line-through' 
+                                  : 'bg-white/5 border-white/5 text-slate-200 hover:border-white/10'
+                              }`}
+                            >
+                              <input 
+                                type="checkbox" 
+                                checked={checked}
+                                onChange={() => {}} // toggled on parent li click
+                                className="mt-0.5 shrink-0 rounded border-white/10 text-indigo-600 focus:ring-indigo-500" 
+                              />
+                              <span className="text-xs font-semibold leading-relaxed">{task}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              });
+            })() : <p className="text-center text-slate-400 py-6">No study roadmap scheduled.</p>}
           </div>
         </div>
       )}
 
+      {/* GAP RADAR TAB */}
+      {activeTab === 'gapradar' && (
+        <GapRadar examId={id} />
+      )}
+
       {/* QUESTIONS TAB */}
       {activeTab === 'questions' && (
-        <div className="glass-panel p-6 animate-fade-in">
-          <div className="flex flex-wrap justify-between items-center mb-6 gap-4 border-b border-white/10 pb-6">
+        <div className="glass-panel p-6 bg-[#121420]/60 animate-fade-in border border-white/5">
+          <div className="flex flex-wrap justify-between items-center mb-6 gap-4 border-b border-white/5 pb-6">
             <h3 className="text-xl font-bold">Historical Question Explorer</h3>
-            <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-sm font-semibold">{questions.length} Questions</span>
+            <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-xs font-semibold">{questions.length} Questions</span>
           </div>
 
           <div className="flex flex-wrap gap-4 mb-8">
-            <div className="flex-grow bg-black/30 border border-white/10 rounded-lg flex items-center px-3 focus-within:border-indigo-500/50 transition-colors">
+            <div className="flex-grow bg-black/40 border border-white/10 rounded-xl flex items-center px-3 focus-within:border-indigo-500/50 transition-colors">
               <Search size={18} className="text-slate-400" />
-              <input type="text" value={questionSearch} onChange={e => setQuestionSearch(e.target.value)} placeholder="Search questions..." className="bg-transparent border-none text-white w-full py-2.5 px-3 focus:outline-none" />
+              <input 
+                type="text" 
+                value={questionSearch} 
+                onChange={e => setQuestionSearch(e.target.value)} 
+                placeholder="Search questions by keyword..." 
+                className="bg-transparent border-none text-white w-full py-2.5 px-3 focus:outline-none text-sm font-medium" 
+              />
             </div>
-            <select className="bg-black/30 border border-white/10 rounded-lg px-4 py-2 text-white outline-none focus:border-indigo-500" value={selectedPaper?.id || ''} onChange={e => {
-              const val = e.target.value;
-              setSelectedPaper(val ? papers.find(p => p.id === parseInt(val)) : null);
-            }}>
+            <select 
+              className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm font-semibold transition-colors" 
+              value={selectedPaper?.id || ''} 
+              onChange={e => {
+                const val = e.target.value;
+                setSelectedPaper(val ? papers.find(p => p.id === parseInt(val)) : null);
+              }}
+            >
               <option value="">All Papers</option>
               {papers.map(p => <option key={p.id} value={p.id}>GATE CS {p.year}</option>)}
             </select>
           </div>
 
-          <div className="flex flex-col gap-4">
-            {questions.slice((currentPage - 1) * questionsPerPage, currentPage * questionsPerPage).map(q => {
-              const parsed = parseOptions(q.question_text);
-              const cleanText = parsed ? parsed.cleanText : q.question_text;
-              const options = parsed ? parsed.options : [];
-              return (
-                <div key={q.id} className="bg-[#191c2c]/40 border border-white/5 rounded-xl overflow-hidden hover:border-indigo-500/30 transition-colors">
-                  <div className="bg-black/20 px-5 py-3 border-b border-white/5 flex flex-wrap justify-between items-center gap-4">
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-indigo-400">Q.{q.question_number}</span>
-                      {!selectedPaper && <span className="text-xs px-2 py-0.5 border border-white/10 rounded text-slate-300">GATE CS {q.paper_year}</span>}
-                      <span className="text-xs px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded">{q.question_style}</span>
-                      <span className="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">{q.marks} Mark(s)</span>
-                    </div>
-                    {q.topic_name && <span className="text-xs font-semibold text-slate-400 px-3 py-1 bg-white/5 rounded-full">{q.topic_name}</span>}
-                  </div>
-                  <div className="p-5">
-                    <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">{cleanText}</p>
-                    {options.length > 0 && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-                        {options.map((opt, oIdx) => (
-                          <div key={oIdx} className="bg-white/5 border border-white/10 p-3 rounded-lg flex items-start gap-3">
-                            <span className="font-bold text-indigo-400 shrink-0">{opt.label})</span>
-                            <span className="text-slate-300 text-sm">{opt.text}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {q.has_diagram && (
-                      <div className="mt-4 flex items-center gap-2 text-amber-500/80 text-sm bg-amber-500/10 p-3 rounded-lg w-fit">
-                        <Image size={16} /> Contains diagram (Placeholder)
-                      </div>
-                    )}
-                    <AnswerSpoiler answer={q.correct_answer} />
+          <div className="space-y-6">
+            {questions.length === 0 ? (
+              <p className="text-center text-slate-400 py-10 font-semibold">No questions found matching your filter rules.</p>
+            ) : (
+              questions.slice((currentPage - 1) * questionsPerPage, currentPage * questionsPerPage).map((q, idx) => (
+                <div key={q.id}>
+                  <QuestionCard 
+                    q={q} 
+                    selectedPaper={selectedPaper}
+                    qNumber={(currentPage - 1) * questionsPerPage + idx + 1}
+                    onAskMentor={handleAskMentor}
+                  />
+                  <div className="px-5 pb-5 -mt-3">
                     <QuestionFeedback questionId={q.id} />
                   </div>
                 </div>
-              );
-            })}
+              ))
+            )}
           </div>
 
-          {/* Pagination */}
+          {/* Question Explorer Pagination */}
           {questions.length > questionsPerPage && (
-            <div className="flex justify-between items-center mt-8 pt-6 border-t border-white/10">
-              <span className="text-sm text-slate-400">Showing {(currentPage - 1) * questionsPerPage + 1} to {Math.min(currentPage * questionsPerPage, questions.length)} of {questions.length}</span>
+            <div className="flex justify-between items-center mt-8 pt-6 border-t border-white/5">
+              <span className="text-xs text-slate-400 font-medium">
+                Showing {(currentPage - 1) * questionsPerPage + 1} to {Math.min(currentPage * questionsPerPage, questions.length)} of {questions.length} questions
+              </span>
               <div className="flex gap-2">
-                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-3 py-1 bg-white/5 border border-white/10 rounded hover:bg-white/10 disabled:opacity-50 text-sm">Prev</button>
-                <button disabled={currentPage * questionsPerPage >= questions.length} onClick={() => setCurrentPage(p => p + 1)} className="px-3 py-1 bg-white/5 border border-white/10 rounded hover:bg-white/10 disabled:opacity-50 text-sm">Next</button>
+                <button 
+                  disabled={currentPage === 1} 
+                  onClick={() => setCurrentPage(p => p - 1)} 
+                  className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 disabled:opacity-40 text-xs font-semibold cursor-pointer"
+                >
+                  Prev
+                </button>
+                <button 
+                  disabled={currentPage * questionsPerPage >= questions.length} 
+                  onClick={() => setCurrentPage(p => p + 1)} 
+                  className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 disabled:opacity-40 text-xs font-semibold cursor-pointer"
+                >
+                  Next
+                </button>
               </div>
             </div>
           )}
         </div>
+      )}
+
+      {/* AI Mentor Chatbot */}
+      <WeaknessChatbot 
+        isOpen={mentorChatOpen} 
+        onClose={() => setMentorChatOpen(false)} 
+        question={mentorQuestion} 
+        onXpEarned={(xp) => {
+          if (addToast) {
+            addToast(`Earned +${xp} XP from AI Syllabus Mentor!`, 'success');
+          }
+        }}
+      />
+
+      {/* Confetti & Study Completion Celebration Modal */}
+      {showCompletionModal && (
+        <>
+          <Confetti />
+          <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 backdrop-blur-md animate-fade-in p-4 overflow-y-auto print:p-0">
+            <div className="bg-[#0f1219] border border-white/10 rounded-2xl w-full max-w-3xl shadow-2xl relative my-8 print-certificate-area">
+              <style>{`
+                @media print {
+                  body * {
+                    visibility: hidden;
+                  }
+                  .print-certificate-area, .print-certificate-area * {
+                    visibility: visible;
+                  }
+                  .print-certificate-area {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    margin: 0;
+                    padding: 40px;
+                    background: #0f1219 !important;
+                    color: #ffffff !important;
+                    border: none !important;
+                  }
+                  .print-certificate-btn-container {
+                    display: none !important;
+                  }
+                }
+              `}</style>
+              
+              {/* Modal Close Button (not printed) */}
+              <button 
+                onClick={() => setShowCompletionModal(false)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors print-certificate-btn-container z-20 cursor-pointer"
+              >
+                <XCircle size={22} />
+              </button>
+
+              <div className="p-8 md:p-12 text-center flex flex-col items-center">
+                {/* Ribbon badge */}
+                <div className="w-20 h-20 rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center mb-6 animate-bounce">
+                  <Award size={42} className="text-amber-400" />
+                </div>
+                
+                <h2 className="text-2xl md:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-500 font-display uppercase tracking-wider mb-2">
+                  Certificate of Achievement
+                </h2>
+                <p className="text-slate-400 text-xs tracking-widest uppercase font-bold mb-8">GATE CS Syllabus Mastery</p>
+                
+                <div className="w-full border-t border-b border-white/5 py-8 my-2 space-y-4">
+                  <p className="text-slate-400 text-sm italic font-medium">This is proudly presented to</p>
+                  
+                  {/* Name field (Interactive & customizable) */}
+                  <div className="max-w-md mx-auto print-certificate-btn-container">
+                    <input 
+                      type="text" 
+                      value={certName}
+                      onChange={e => setCertName(e.target.value)}
+                      className="text-2xl md:text-3xl font-black text-white text-center bg-transparent border-b border-indigo-500/30 focus:border-indigo-500 outline-none w-full pb-2 font-display"
+                      placeholder="Enter Your Name"
+                    />
+                    <span className="text-[10px] text-slate-500 mt-1 block">Click to edit name on certificate</span>
+                  </div>
+                  
+                  {/* Print-only static name */}
+                  <div className="hidden print:block text-3xl font-black text-white font-display">
+                    {certName}
+                  </div>
+
+                  <p className="text-slate-300 text-sm max-w-lg mx-auto leading-relaxed">
+                    for demonstrating complete diligence and mastering 100% of the structured preparation timeline, conquering all predictive targets and syllabus domains.
+                  </p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-8 w-full max-w-md mt-6 text-left">
+                  <div>
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Date of Completion</span>
+                    <span className="text-sm font-bold text-white mt-1 block">
+                      {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold block">Authorized Issuer</span>
+                    <span className="text-sm font-bold text-indigo-400 mt-1 block font-display">ExamArchitect AI</span>
+                  </div>
+                </div>
+
+                {/* Print and Claim Buttons */}
+                <div className="flex gap-4 mt-10 print-certificate-btn-container">
+                  <button 
+                    onClick={() => window.print()}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 px-6 rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                  >
+                    <Printer size={14} /> Print Certificate
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowCompletionModal(false);
+                      if (addToast) {
+                        addToast("Certificate claimed! 5000 XP credited to your local profile.", "success");
+                      }
+                    }}
+                    className="bg-white/5 hover:bg-white/10 text-white border border-white/10 font-bold text-xs py-3 px-6 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Close Celebration
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

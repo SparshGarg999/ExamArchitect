@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 # pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
+from sqlalchemy import func as sa_func
 from typing import List, Dict, Any
 from datetime import timedelta
 
@@ -357,12 +358,15 @@ def get_paper_questions(paper_id: int, topic_id: int = None, subject_id: int = N
     return result
 
 @app.get("/api/questions", response_model=List[Dict[str, Any]])
-def get_global_questions(topic_id: int = None, subject_id: int = None, exam_id: int = None, search: str = None, limit: int = 50, offset: int = 0, db: Session = Depends(get_db)):
+def get_global_questions(topic_id: int = None, subject_id: int = None, exam_id: int = None, search: str = None, limit: int = 200, offset: int = 0, year: int = None, db: Session = Depends(get_db)):
     query = db.query(Question)
     if exam_id:
         query = query.join(Paper).filter(Paper.exam_id == exam_id)
     else:
         query = query.join(Paper)
+
+    if year:
+        query = query.filter(Paper.year == year)
 
     if topic_id:
         query = query.filter((Question.topic_id == topic_id) | (Question.secondary_topic_id == topic_id))
@@ -373,8 +377,9 @@ def get_global_questions(topic_id: int = None, subject_id: int = None, exam_id: 
     if search:
         query = query.filter(Question.question_text.ilike(make_search_pattern(search)))
     
-    # Order by paper year desc, then question number
-    query = query.order_by(Paper.year.desc(), Question.question_number)
+    # When showing all papers (no specific paper selected), randomize order
+    # so users see questions from all years, not just the newest
+    query = query.order_by(sa_func.random())
     
     # Pagination
     query = query.offset(offset).limit(limit)
@@ -528,7 +533,7 @@ def approve_staged_questions(paper_id: int, approval_data: ApprovalList, db: Ses
     return {"status": "approved", "ingested_count": len(approval_data.questions)}
 
 @app.post("/api/ingest/bulk", response_model=Dict[str, Any])
-def bulk_ingest_historical_data(db: Session = Depends(get_db)):
+def bulk_ingest_historical_data(db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
     """
     Triggers the real parser and ingest pipeline script (parse_and_ingest_all.py) in a subprocess,
     which clears the database and performs actual PDF parsing and extraction.
@@ -716,3 +721,140 @@ def get_feedbacks(db: Session = Depends(get_db), admin: User = Depends(get_curre
             "types": g.types
         })
     return result
+
+
+# --- GAP Radar (Predictive Performance Analytics) ---
+@app.get("/api/exams/{exam_id}/gap-radar", response_model=Dict[str, Any])
+def get_gap_radar(exam_id: int, db: Session = Depends(get_db)):
+    """
+    Returns per-subject marks data for the radar chart.
+    Compares actual historical average marks per subject against the 'ideal topper' benchmark.
+    """
+    # Get all parent topics (subjects) for this exam
+    subjects = db.query(Topic).filter_by(exam_id=exam_id, parent_topic_id=None).all()
+    if not subjects:
+        return {"subjects": [], "userScores": [], "topScores": [], "maxScore": 100}
+
+    subject_names = []
+    user_scores = []
+    top_scores = []
+
+    for subj in subjects:
+        subject_names.append(subj.name)
+
+        # Get all child topic IDs for this subject
+        child_ids = [t.id for t in db.query(Topic).filter_by(parent_topic_id=subj.id).all()]
+        child_ids.append(subj.id)
+
+        # Sum up historical marks across all years for this subject
+        stats = db.query(TopicYearStat).filter(
+            TopicYearStat.topic_id.in_(child_ids),
+            TopicYearStat.exam_id == exam_id
+        ).all()
+
+        total_marks = sum(s.total_marks for s in stats) if stats else 0
+        total_questions = sum(s.question_count for s in stats) if stats else 0
+
+        # Count how many distinct years data exists
+        distinct_years = len(set(s.year for s in stats)) if stats else 1
+
+        # Average marks per year for this subject
+        avg_marks = total_marks / max(distinct_years, 1)
+        user_scores.append(round(avg_marks, 1))
+
+        # "Topper" benchmark: assume topper gets ~90% of total marks available per year
+        max_marks_per_year = total_marks / max(distinct_years, 1) if distinct_years > 0 else 10
+        topper_marks = max_marks_per_year * 1.3  # 30% above average as topper benchmark
+        top_scores.append(round(topper_marks, 1))
+
+    # Normalize scores to 0-100 scale for radar chart
+    max_val = max(max(user_scores, default=1), max(top_scores, default=1))
+    if max_val > 0:
+        user_scores_norm = [round((s / max_val) * 100, 1) for s in user_scores]
+        top_scores_norm = [round((s / max_val) * 100, 1) for s in top_scores]
+    else:
+        user_scores_norm = user_scores
+        top_scores_norm = top_scores
+
+    return {
+        "subjects": subject_names,
+        "userScores": user_scores_norm,
+        "topScores": top_scores_norm,
+        "maxScore": 100
+    }
+
+
+# --- AI Weakness Chatbot (Syllabus Mentor) ---
+class MentorRequest(BaseModel):
+    question_text: str
+    user_answer: str = None
+    correct_answer: str = None
+    topic_name: str = None
+
+@app.post("/api/mentor", response_model=Dict[str, Any])
+def ai_mentor_explain(req: MentorRequest):
+    """
+    Uses Gemini API to generate a step-by-step explanation for a question.
+    Provides hints, solution walkthrough, and concept clarification.
+    """
+    import google.generativeai as genai
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        return {
+            "explanation": "AI Mentor is not configured. Please set GEMINI_API_KEY in your environment.",
+            "tips": [],
+            "xp_earned": 0
+        }
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+
+    prompt = f"""You are the ExamArchitect AI Mentor — a friendly, expert GATE CS tutor.
+
+A student needs help with this question:
+---
+{req.question_text}
+---
+"""
+    if req.correct_answer:
+        prompt += f"\nCorrect Answer: {req.correct_answer}"
+    if req.user_answer:
+        prompt += f"\nStudent's Answer: {req.user_answer}"
+    if req.topic_name:
+        prompt += f"\nTopic: {req.topic_name}"
+
+    prompt += """
+
+Provide a clear, structured response with:
+1. **Concept Review**: Briefly explain the key concept(s) needed (2-3 sentences)
+2. **Step-by-Step Solution**: Walk through the solution methodically
+3. **Why the correct answer is right**: Explain the reasoning
+4. **Common Mistakes**: What students typically get wrong here
+5. **Quick Tips**: 2-3 actionable study tips for this topic
+
+Format using markdown. Be encouraging and clear. Keep total response under 400 words."""
+
+    try:
+        response = model.generate_content(prompt)
+        explanation = response.text.strip()
+
+        # Extract tips from the explanation
+        tips = []
+        if "Quick Tips" in explanation:
+            tips_section = explanation.split("Quick Tips")[-1]
+            tip_lines = [l.strip().lstrip("- •*0123456789.") for l in tips_section.split("\n") if l.strip() and len(l.strip()) > 5]
+            tips = tip_lines[:3]
+
+        return {
+            "explanation": explanation,
+            "tips": tips,
+            "xp_earned": 50
+        }
+    except Exception as e:
+        print(f"Gemini mentor generation failed: {e}")
+        return {
+            "explanation": f"The AI Mentor encountered an error: {str(e)}. Please try again.",
+            "tips": ["Review the textbook chapter for this topic", "Practice similar problems from past papers"],
+            "xp_earned": 0
+        }
