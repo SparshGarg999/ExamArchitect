@@ -193,11 +193,27 @@ export default function MockExam({ addToast }) {
     if (!mockExam) return;
     
     let calculatedScore = 0;
+    const topicResultsMap = {};
+    
     mockExam.questions.forEach(q => {
+      const topicId = q.topic_id;
+      if (topicId) {
+        if (!topicResultsMap[topicId]) {
+          topicResultsMap[topicId] = {
+            topic_id: topicId,
+            marks_attempted: 0,
+            marks_earned: 0
+          };
+        }
+        topicResultsMap[topicId].marks_attempted += (q.marks || 1);
+      }
+
       const answer = userAnswers[q.id];
+      let isCorrect = false;
+
       if (q.question_style === 'NAT') {
         if (checkNatCorrectness(String(answer), q.correct_answer || '')) {
-          calculatedScore += q.marks || 1;
+          isCorrect = true;
         }
       } else if (q.question_style === 'MSQ') {
         const correctList = q.correct_answer 
@@ -207,12 +223,19 @@ export default function MockExam({ addToast }) {
         const cleanUser = userList.map(x => x.trim().toUpperCase()).sort().join('');
         const cleanCorrect = correctList.sort().join('');
         if (cleanUser === cleanCorrect && cleanCorrect.length > 0) {
-          calculatedScore += q.marks || 1;
+          isCorrect = true;
         }
       } else {
         // MCQ
         if (typeof answer === 'string' && q.correct_answer && answer.trim().toUpperCase() === q.correct_answer.trim().toUpperCase()) {
-          calculatedScore += q.marks || 1;
+          isCorrect = true;
+        }
+      }
+
+      if (isCorrect) {
+        calculatedScore += q.marks || 1;
+        if (topicId) {
+          topicResultsMap[topicId].marks_earned += (q.marks || 1);
         }
       }
     });
@@ -220,6 +243,21 @@ export default function MockExam({ addToast }) {
     setScore(calculatedScore);
     setExamSubmitted(true);
     window.scrollTo({ top: 400, behavior: 'smooth' });
+
+    // Submit actual performance data to backend
+    if (currentUser && selectedExamId && Object.keys(topicResultsMap).length > 0) {
+      fetch(`${API_BASE}/api/user-exams/submit-results`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({
+          exam_id: selectedExamId,
+          topic_results: Object.values(topicResultsMap)
+        })
+      }).catch(err => console.error("[MockExam] Failed to submit results:", err));
+    }
   };
 
   const handleSave = async () => {

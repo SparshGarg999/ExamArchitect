@@ -220,9 +220,9 @@ export default function Dashboard({ addToast }) {
   const [studyStreak, setStudyStreak] = useState(() => {
     try {
       const saved = localStorage.getItem('studyPlannerStreak');
-      return saved ? parseInt(saved) : 4;
+      return saved ? parseInt(saved) : 0;
     } catch {
-      return 4;
+      return 0;
     }
   });
 
@@ -528,7 +528,7 @@ export default function Dashboard({ addToast }) {
           e.stopPropagation();
           setSelectedHeatmapTopic(topic);
         }}
-        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border ${borderStyle} transition-all hover:scale-[1.05] hover:border-white/30 relative group cursor-pointer ${marks > 7 ? 'shadow-md shadow-rose-950/20 animate-pulse-slow' : ''}`}
+        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border ${borderStyle} transition-all hover:scale-[1.05] hover:border-white/30 hover:z-[60] relative group cursor-pointer ${marks > 7 ? 'shadow-md shadow-rose-950/20 animate-pulse-slow' : ''}`}
       >
         {cellContent}
         
@@ -670,7 +670,15 @@ export default function Dashboard({ addToast }) {
           </div>
           
           <StatCard title="Database Papers" value={`${papers.length} Years`} color={themeAccent} />
-          <StatCard title="AI Confidence" value="94.2%" color="emerald" />
+          <StatCard 
+            title="AI Confidence" 
+            value={
+              predictions.length > 0 
+                ? (predictions.reduce((acc, p) => acc + (1 - (p.confidence_high - p.confidence_low)), 0) / predictions.length * 100).toFixed(1) + '%' 
+                : 'N/A'
+            } 
+            color="emerald" 
+          />
         </div>
       </div>
 
@@ -1594,10 +1602,31 @@ export default function Dashboard({ addToast }) {
 
       {/* STUDY PLAN TAB */}
       {activeTab === 'studyplan' && (
-        <div className="space-y-8 animate-fade-in">
-          {/* Gamified Mastery Tracker (Header) */}
-          {studyPlan.length > 0 && (() => {
-            let totalTasks = 0;
+        <div className="space-y-8 animate-fade-in relative group">
+          {!currentUser && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#121420]/80 backdrop-blur-sm rounded-2xl border border-white/10 transition-all duration-300">
+              <div className="bg-[#1e2336] p-6 rounded-2xl border border-indigo-500/20 text-center max-w-sm shadow-2xl flex flex-col items-center">
+                <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mb-4">
+                  <Lock size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Login Required</h3>
+                <p className="text-sm text-slate-400 mb-6">
+                  Sign in to generate and track your personalized dynamic study plan.
+                </p>
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
+                >
+                  Sign In Now
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className={!currentUser ? 'opacity-40 pointer-events-none filter blur-[2px]' : ''}>
+            {/* Gamified Mastery Tracker (Header) */}
+            {studyPlan.length > 0 && (() => {
+              let totalTasks = 0;
             let completedCount = 0;
             studyPlan.forEach(plan => {
               plan.tasks.forEach((task, tIdx) => {
@@ -2011,6 +2040,7 @@ export default function Dashboard({ addToast }) {
                 );
               });
             })() : <p className="text-center text-slate-400 py-6">No study roadmap scheduled.</p>}
+            </div>
           </div>
         </div>
       )}
@@ -2056,7 +2086,7 @@ export default function Dashboard({ addToast }) {
             {questions.length === 0 ? (
               <p className="text-center text-slate-400 py-10 font-semibold">No questions found matching your filter rules.</p>
             ) : (
-              questions.slice((currentPage - 1) * questionsPerPage, currentPage * questionsPerPage).map((q, idx) => (
+              questions.slice((currentPage - 1) * questionsPerPage, currentPage * questionsPerPage).map((q) => (
                 <div key={q.id}>
                   <QuestionCard 
                     q={q} 

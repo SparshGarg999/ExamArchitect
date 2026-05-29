@@ -3,9 +3,11 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip, Legend
 } from 'recharts';
-import { TrendingUp, Target, Zap } from 'lucide-react';
+import { TrendingUp, Target, Zap, Lock, Activity } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 import { API_BASE } from '../config';
+import { useAuth } from '../context/AuthContext';
 
 const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
@@ -25,6 +27,7 @@ const CustomTooltip = ({ active, payload }) => {
 };
 
 export default function GapRadar({ examId }) {
+  const { currentUser, token } = useAuth();
   const [radarData, setRadarData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -32,7 +35,11 @@ export default function GapRadar({ examId }) {
   useEffect(() => {
     if (!examId) return;
     setLoading(true);
-    fetch(`${API_BASE}/api/exams/${examId}/gap-radar`)
+    fetch(`${API_BASE}/api/exams/${examId}/gap-radar`, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` })
+      }
+    })
       .then(res => res.json())
       .then(data => {
         setRadarData(data);
@@ -75,9 +82,48 @@ export default function GapRadar({ examId }) {
   const strongSubjects = sortedByGap.filter(s => s.gap <= 10).slice(0, 3);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in relative group">
+      {/* Login Overlay */}
+      {!currentUser ? (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#121420]/80 backdrop-blur-sm rounded-2xl border border-white/10 transition-all duration-300">
+          <div className="bg-[#1e2336] p-6 rounded-2xl border border-indigo-500/20 text-center max-w-sm shadow-2xl flex flex-col items-center">
+            <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mb-4">
+              <Lock size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Login Required</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Sign in to view your personalized Gap Radar and compare your performance against the topper benchmark.
+            </p>
+            <Link 
+              to="/login"
+              className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
+            >
+              Sign In Now
+            </Link>
+          </div>
+        </div>
+      ) : radarData?.has_data === false ? (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#121420]/80 backdrop-blur-sm rounded-2xl border border-white/10 transition-all duration-300">
+          <div className="bg-[#1e2336] p-6 rounded-2xl border border-indigo-500/20 text-center max-w-sm shadow-2xl flex flex-col items-center">
+            <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mb-4">
+              <Activity size={24} />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">No Performance Data</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Take a mock test so your actual scores can be tracked and compared against the topper benchmark!
+            </p>
+            <Link 
+              to="/mock-exam"
+              className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
+            >
+              Take a Test Now
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       {/* Radar Chart Panel */}
-      <div className="glass-panel p-6 bg-[#121420]/60 border border-white/5 rounded-2xl">
+      <div className={`glass-panel p-6 bg-[#121420]/60 border border-white/5 rounded-2xl ${(!currentUser || radarData?.has_data === false) ? 'opacity-40 pointer-events-none filter blur-[2px]' : ''}`}>
         <div className="flex items-center justify-between mb-6">
           <div>
             <h3 className="text-xl font-bold text-white font-display flex items-center gap-2">
