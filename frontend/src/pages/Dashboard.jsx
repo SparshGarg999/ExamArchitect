@@ -22,10 +22,9 @@ import StatCard from '../components/StatCard';
 import GapRadar from '../components/GapRadar';
 import WeaknessChatbot from '../components/WeaknessChatbot';
 import Confetti from '../components/Confetti';
+import { API_BASE } from '../config';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Legend);
-
-import { API_BASE } from '../config';
 
 const COMMON_TOPICS_PRESETS = [
   "Instruction Pipelining",
