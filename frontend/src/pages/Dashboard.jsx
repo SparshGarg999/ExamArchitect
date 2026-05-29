@@ -25,7 +25,7 @@ import Confetti from '../components/Confetti';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, Legend);
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 const COMMON_TOPICS_PRESETS = [
   "Instruction Pipelining",

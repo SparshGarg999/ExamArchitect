@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { TrendingUp, Target, Zap } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 const CustomTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, Check, X, ChevronRight, BrainCircuit, RefreshCw, Database, ShieldAlert, Activity, MessageSquare, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 export default function Admin({ addToast }) {
   const { currentUser } = useAuth();

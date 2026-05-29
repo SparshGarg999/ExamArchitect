@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Send, Bot, Sparkles, BookOpen, Lightbulb, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 const escapeHtml = (unsafe) => {
   return (unsafe || '')

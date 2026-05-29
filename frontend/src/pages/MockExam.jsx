@@ -4,7 +4,7 @@ import { BrainCircuit, AlertCircle, SaveAll, CheckCircle, RefreshCw, XCircle, Tr
 import QuestionCard, { checkNatCorrectness } from '../components/QuestionCard';
 import WeaknessChatbot from '../components/WeaknessChatbot';
 
-const API_BASE = 'http://localhost:8000';
+import { API_BASE } from '../config';
 
 export default function MockExam({ addToast }) {
   const { currentUser } = useAuth();
