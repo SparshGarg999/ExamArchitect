@@ -14,6 +14,7 @@
  *  7. Sanitize any user-supplied content before rendering as HTML.
  * ============================================================
  */
+/* eslint-disable no-unused-vars */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';

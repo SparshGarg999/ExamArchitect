@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { BrainCircuit, AlertCircle, SaveAll, CheckCircle, RefreshCw, XCircle, Trash2, BookOpen } from 'lucide-react';
+import { BrainCircuit, AlertCircle, SaveAll, CheckCircle, RefreshCw, Trash2, BookOpen } from 'lucide-react';
 import QuestionCard, { checkNatCorrectness } from '../components/QuestionCard';
 import WeaknessChatbot from '../components/WeaknessChatbot';
 

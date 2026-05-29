@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  ArrowRight, BarChart3, TrendingUp, BrainCircuit, Target, BookOpen,
+  ArrowRight, BarChart3, TrendingUp, BrainCircuit, Target,
   Zap, Shield, ChevronDown, Star, CheckCircle, Cpu, Layers,
-  AlertTriangle, ChevronLeft, FlameKindling, Sigma, FileText, X
+  Sigma, FileText, X
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import Ribbons from '../components/Ribbons';
@@ -112,7 +112,7 @@ function StepCard({ number, title, description, icon: Icon }) {
 /* ═══════════════════════════════════════════════════════════════ */
 /*  Main Landing Page Component                                    */
 /* ═══════════════════════════════════════════════════════════════ */
-export default function Home({ addToast }) {
+export default function Home() {
   const navigate = useNavigate();
 
   // Categories state (for discipline selector section)

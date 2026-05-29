@@ -1,5 +1,4 @@
-import React from 'react';
-import { Shield, Lock, EyeOff, Server } from 'lucide-react';
+import { Shield, EyeOff, Server } from 'lucide-react';
 
 export default function PrivacyPolicy() {
   return (
