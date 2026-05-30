@@ -22,17 +22,17 @@ def run_migration():
     postgres_url = os.getenv("DATABASE_URL")
     
     if not postgres_url:
-        print("❌ Error: DATABASE_URL environment variable is not defined in backend/.env!")
+        print("[ERROR] DATABASE_URL environment variable is not defined in backend/.env!")
         sys.exit(1)
         
     if postgres_url.startswith("postgres://"):
         postgres_url = postgres_url.replace("postgres://", "postgresql://", 1)
         
     if postgres_url.startswith("sqlite"):
-        print("⚠️ Warning: DATABASE_URL is set to a SQLite database. Migration requires a PostgreSQL target.")
+        print("[WARNING] DATABASE_URL is set to a SQLite database. Migration requires a PostgreSQL target.")
         sys.exit(1)
         
-    print("🚀 Initializing databases...")
+    print("[INFO] Initializing databases...")
     
     # Engines & Sessions
     sqlite_engine = create_engine(sqlite_url, connect_args={"check_same_thread": False})
@@ -45,7 +45,7 @@ def run_migration():
     postgres_db = PostgresSession()
     
     try:
-        print("📦 Recreating schemas on target database...")
+        print("[INFO] Recreating schemas on target database...")
         # Create all tables on PostgreSQL if they don't exist
         Base.metadata.create_all(bind=postgres_engine)
         
@@ -67,7 +67,7 @@ def run_migration():
         ]
         
         # Clean existing PostgreSQL target tables before copy to prevent duplicates
-        print("🧹 Clearing target database tables...")
+        print("[INFO] Clearing target database tables...")
         for model, name in reversed(migration_sequence):
             postgres_db.query(model).delete()
         # Clear topics
@@ -77,7 +77,7 @@ def run_migration():
         # 1. Copy Users & Category
         for model, name in migration_sequence[:3]:
             rows = sqlite_db.query(model).all()
-            print(f"🔹 Migrating {name} ({len(rows)} rows)...")
+            print(f"[INFO] Migrating {name} ({len(rows)} rows)...")
             for row in rows:
                 sqlite_db.expunge(row)
                 make_transient(row)
@@ -85,7 +85,7 @@ def run_migration():
             postgres_db.commit()
             
         # 2. Copy Topics (Hierarchical: parents first, then children to satisfy FK constraint)
-        print("🔹 Migrating Topics...")
+        print("[INFO] Migrating Topics...")
         # Parents (parent_topic_id IS NULL)
         parents = sqlite_db.query(Topic).filter(Topic.parent_topic_id.is_(None)).all()
         print(f"   -> Copying parent subjects ({len(parents)} rows)...")
@@ -107,7 +107,7 @@ def run_migration():
         # 3. Copy remaining relational dependency tables
         for model, name in migration_sequence[3:]:
             rows = sqlite_db.query(model).all()
-            print(f"🔹 Migrating {name} ({len(rows)} rows)...")
+            print(f"[INFO] Migrating {name} ({len(rows)} rows)...")
             # Batch inserts for heavy tables (e.g. Questions)
             for i, row in enumerate(rows):
                 sqlite_db.expunge(row)
@@ -117,10 +117,10 @@ def run_migration():
                     postgres_db.commit()
             postgres_db.commit()
             
-        print("✅ Data copy successfully completed!")
+        print("[SUCCESS] Data copy successfully completed!")
         
         # 4. Synchronize auto-incrementing primary key ID sequences in PostgreSQL
-        print("🔄 Synchronizing auto-incrementing ID sequences...")
+        print("[INFO] Synchronizing auto-incrementing ID sequences...")
         tables_to_sync = [
             "users", "exam_categories", "exams", "topics", "papers", "questions",
             "syllabus_versions", "syllabus_version_topics", "topic_year_stats",
@@ -133,12 +133,12 @@ def run_migration():
             postgres_db.execute(text(sync_sql))
             
         postgres_db.commit()
-        print("✅ Auto-increment sequences successfully synchronized!")
-        print("\n🎉 Database migration to Supabase completed flawlessly!")
+        print("[SUCCESS] Auto-increment sequences successfully synchronized!")
+        print("\n[SUCCESS] Database migration to Supabase completed flawlessly!")
         
     except Exception as e:
         postgres_db.rollback()
-        print(f"❌ Error during migration: {e}")
+        print(f"[ERROR] Error during migration: {e}")
         sys.exit(1)
     finally:
         sqlite_db.close()
