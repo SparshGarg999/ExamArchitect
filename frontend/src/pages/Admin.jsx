@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Check, X, ChevronRight, BrainCircuit, RefreshCw, Database, ShieldAlert, Activity, MessageSquare, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Check, X, BrainCircuit, RefreshCw, Database, ShieldAlert, Activity, MessageSquare, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 import { API_BASE } from '../config';
 
 export default function Admin({ addToast }) {
-  const { currentUser } = useAuth();
+  const { currentUser, token } = useAuth();
   const [activeTab, setActiveTab] = useState('pipeline');
   
   const [questions, setQuestions] = useState([]);
@@ -30,66 +30,113 @@ export default function Admin({ addToast }) {
   const [logs, setLogs] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
 
+  const examsFetchRef = useRef(null);
   useEffect(() => {
-    fetch(`${API_BASE}/api/exams`)
-      .then(res => res.json())
+    if (examsFetchRef.current) examsFetchRef.current.abort();
+    examsFetchRef.current = new AbortController();
+    fetch(`${API_BASE}/api/exams`, { signal: examsFetchRef.current.signal })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         setExams(data);
         if (data.length > 0) setSelectedExamId(data[0].id);
       })
-      .catch(err => console.error(err));
-  }, []);
+      .catch(err => {
+        if (err.name === 'AbortError') return;
+        console.error('[Admin] fetchExams:', err.message);
+        addToast?.('Failed to load exams.', 'error');
+      });
+    return () => examsFetchRef.current?.abort();
+  }, [addToast]);
 
+  const examDetailRef = useRef(null);
   useEffect(() => {
-    if (selectedExamId) {
-      fetch(`${API_BASE}/api/exams/${selectedExamId}/papers`)
-        .then(res => res.json())
-        .then(data => {
-          setPapers(data);
-          if (data.length > 0) setSelectedPaperId(data[0].id);
-        });
+    if (!selectedExamId) return;
+    if (examDetailRef.current) examDetailRef.current.abort();
+    examDetailRef.current = new AbortController();
+    const sig = examDetailRef.current.signal;
 
-      fetch(`${API_BASE}/api/exams/${selectedExamId}/topics`)
-        .then(res => res.json())
-        .then(data => {
-          const topicNames = [];
-          data.forEach(t => {
-            topicNames.push(t.name);
-            if (t.subtopics) t.subtopics.forEach(sub => topicNames.push(sub.name));
-          });
-          setTopics(topicNames);
-        });
-    }
-  }, [selectedExamId]);
+    fetch(`${API_BASE}/api/exams/${selectedExamId}/papers`, { signal: sig })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        setPapers(data);
+        if (data.length > 0) setSelectedPaperId(data[0].id);
+      })
+      .catch(err => {
+        if (err.name === 'AbortError') return;
+        console.error('[Admin] fetchPapers:', err.message);
+        addToast?.('Failed to load papers.', 'error');
+      });
 
+    fetch(`${API_BASE}/api/exams/${selectedExamId}/topics`, { signal: sig })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const topicNames = [];
+        data.forEach(t => {
+          topicNames.push(t.name);
+          if (t.subtopics) t.subtopics.forEach(sub => topicNames.push(sub.name));
+        });
+        setTopics(topicNames);
+      })
+      .catch(err => {
+        if (err.name === 'AbortError') return;
+        console.error('[Admin] fetchTopics:', err.message);
+      });
+
+    return () => examDetailRef.current?.abort();
+  }, [selectedExamId, addToast]);
+
+  const paperQRef = useRef(null);
   useEffect(() => {
-    if (activeTab === 'pipeline' && selectedPaperId) {
-      setLoading(true);
-      fetch(`${API_BASE}/api/papers/${selectedPaperId}/staged`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.length > 0) {
-            setQuestions(data.map((q, i) => ({ ...q, id: i + 1, is_simulated: false })));
-          } else {
-            fetch(`${API_BASE}/api/papers/${selectedPaperId}/questions`)
-              .then(res => res.json())
-              .then(dbQuestions => {
-                if (dbQuestions.length > 0) {
-                  setQuestions(dbQuestions.map(q => ({ ...q, is_simulated: false, suggested_subject: q.parent_subject_name || q.topic_name, suggested_chapter: q.topic_name })));
-                } else {
-                  setQuestions([]);
-                }
-                setLoading(false);
-              })
-              .catch(() => { setQuestions([]); setLoading(false); });
-            return;
-          }
+    if (activeTab !== 'pipeline' || !selectedPaperId) return;
+    if (paperQRef.current) paperQRef.current.abort();
+    paperQRef.current = new AbortController();
+    const sig = paperQRef.current.signal;
+
+    setLoading(true);
+    fetch(`${API_BASE}/api/papers/${selectedPaperId}/staged`, { signal: sig })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (data && data.length > 0) {
+          setQuestions(data.map((q, i) => ({ ...q, id: i + 1, is_simulated: false })));
           setLoading(false);
           setCurrentIndex(0);
-        })
-        .catch(() => { setQuestions([]); setLoading(false); });
-    }
-  }, [selectedPaperId, activeTab]);
+        } else {
+          return fetch(`${API_BASE}/api/papers/${selectedPaperId}/questions`, { signal: sig })
+            .then(res => {
+              if (!res.ok) throw new Error(`Server error: ${res.status}`);
+              return res.json();
+            })
+            .then(dbQuestions => {
+              setQuestions(dbQuestions.length > 0
+                ? dbQuestions.map(q => ({ ...q, is_simulated: false, suggested_subject: q.parent_subject_name || q.topic_name, suggested_chapter: q.topic_name }))
+                : []
+              );
+              setLoading(false);
+            });
+        }
+      })
+      .catch(err => {
+        if (err.name === 'AbortError') return;
+        console.error('[Admin] fetchQuestions:', err.message);
+        setQuestions([]);
+        setLoading(false);
+        addToast?.('Failed to load questions.', 'error');
+      });
+
+    return () => paperQRef.current?.abort();
+  }, [selectedPaperId, activeTab, addToast]);
 
   useEffect(() => {
     if (questions.length > 0 && currentIndex < questions.length) {
@@ -97,24 +144,36 @@ export default function Admin({ addToast }) {
     }
   }, [currentIndex, questions]);
 
+  const adminDataRef = useRef(null);
   useEffect(() => {
-    if (activeTab === 'logs' || activeTab === 'feedbacks') {
-      const token = localStorage.getItem('token');
-      if (activeTab === 'logs') {
-        fetch(`${API_BASE}/api/admin/logs`, { headers: { 'Authorization': `Bearer ${token}` }})
-          .then(res => res.json())
-          .then(data => setLogs(data))
-          .catch(err => console.error(err));
-      } else {
-        fetch(`${API_BASE}/api/admin/feedbacks`, { headers: { 'Authorization': `Bearer ${token}` }})
-          .then(res => res.json())
-          .then(data => setFeedbacks(data))
-          .catch(err => console.error(err));
-      }
-    }
-  }, [activeTab]);
+    if (activeTab !== 'logs' && activeTab !== 'feedbacks') return;
+    if (adminDataRef.current) adminDataRef.current.abort();
+    adminDataRef.current = new AbortController();
+    const sig = adminDataRef.current.signal;
+    const endpoint = activeTab === 'logs' ? 'logs' : 'feedbacks';
 
-  const handlePasswordReset = (e) => {
+    fetch(`${API_BASE}/api/admin/${endpoint}`, {
+      signal: sig,
+      headers: { ...(token && { Authorization: `Bearer ${token}` }) },
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        if (activeTab === 'logs') setLogs(data);
+        else setFeedbacks(data);
+      })
+      .catch(err => {
+        if (err.name === 'AbortError') return;
+        console.error(`[Admin] fetch${endpoint}:`, err.message);
+        addToast?.(`Failed to load ${endpoint}.`, 'error');
+      });
+
+    return () => adminDataRef.current?.abort();
+  }, [activeTab, token, addToast]);
+
+  const handlePasswordReset = async (e) => {
     e.preventDefault();
     setResetError('');
     if (newPassword !== confirmPassword) {
@@ -122,36 +181,34 @@ export default function Admin({ addToast }) {
       return;
     }
     setResetting(true);
-    const token = localStorage.getItem('token');
-    fetch(`${API_BASE}/api/auth/reset-password`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}` 
-      },
-      body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword })
-    })
-      .then(async res => {
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || 'Failed to reset password');
-        }
-        return res.json();
-      })
-      .then(() => {
-        setResetting(false);
-        if (addToast) addToast('Password reset successful!', 'success');
-        // Force a page reload to update currentUser context
-        window.location.reload();
-      })
-      .catch(err => {
-        setResetting(false);
-        setResetError(err.message);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        // Only send the fields the API requires
+        body: JSON.stringify({ new_password: newPassword, confirm_password: confirmPassword }),
       });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.detail || 'Failed to reset password');
+      }
+      addToast?.('Password reset successful!', 'success');
+      // Force a page reload to update currentUser context
+      window.location.reload();
+    } catch (err) {
+      console.error('[Admin] handlePasswordReset:', err.message);
+      setResetError(err.message);
+    } finally {
+      setResetting(false);
+    }
   };
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedPaperId) return;
+    // Only send the fields the API requires
     const approvalPayload = {
       questions: [{
         question_number: editedData.question_number || currentIndex + 1,
@@ -162,30 +219,33 @@ export default function Admin({ addToast }) {
         correct_answer: editedData.correct_answer || null,
         suggested_subject: editedData.suggested_subject || null,
         suggested_chapter: editedData.suggested_chapter || null,
-        image_path: editedData.image_path || null
-      }]
+        image_path: editedData.image_path || null,
+      }],
     };
 
     setLoading(true);
-    fetch(`${API_BASE}/api/papers/${selectedPaperId}/staged/approve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(approvalPayload)
-    })
-      .then(res => {
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
-        return res.json();
-      })
-      .then(() => {
-        setLoading(false);
-        if (addToast) addToast(`Question approved!`, 'success');
-        if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1);
-        else if (addToast) addToast('All questions reviewed!', 'success');
-      })
-      .catch(err => {
-        setLoading(false);
-        if (addToast) addToast(`Failed: ${err.message}`, 'error');
+    try {
+      const res = await fetch(`${API_BASE}/api/papers/${selectedPaperId}/staged/approve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(approvalPayload),
       });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.detail || `Server error: ${res.status}`);
+      }
+      addToast?.('Question approved!', 'success');
+      if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1);
+      else addToast?.('All questions reviewed!', 'success');
+    } catch (err) {
+      console.error('[Admin] handleApprove:', err.message);
+      addToast?.(`Failed: ${err.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReject = () => {

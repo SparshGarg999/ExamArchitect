@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Shared/Navbar';
+import LandingNavbar from './components/Shared/LandingNavbar';
 import ToastContainer from './components/Shared/ToastContainer';
 import ProtectedRoute from './components/Shared/ProtectedRoute';
 
@@ -14,6 +15,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 
 export default function App() {
   const [toasts, setToasts] = useState([]);
+  const location = useLocation();
   
   const addToast = useCallback((message, type = 'info') => {
     const id = Date.now() + Math.random();
@@ -26,11 +28,11 @@ export default function App() {
   }, []);
 
   return (
-    <div className="min-h-screen text-slate-100 font-body relative overflow-x-hidden bg-[#0a0b10]">
-      <Navbar />
+    <div className="min-h-screen flex flex-col text-slate-100 font-body relative overflow-x-hidden bg-[#0a0b10]">
+      {['/', '/privacy'].includes(location.pathname) ? <LandingNavbar /> : <Navbar />}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       
-      <main className="pb-20">
+      <main className="flex-grow pb-20">
         <Routes>
           <Route path="/" element={<Home addToast={addToast} />} />
           <Route path="/login" element={<Login />} />
@@ -48,7 +50,7 @@ export default function App() {
         </Routes>
       </main>
       
-      <footer className="border-t border-white/5 py-6 mt-auto text-center text-slate-500 text-sm">
+      <footer className="relative z-10 border-t border-white/5 py-6 mt-auto text-center text-slate-500 text-sm">
         <div className="flex items-center justify-center gap-4">
           <span>&copy; {new Date().getFullYear()} ExamArchitect</span>
           <a href="/privacy" className="hover:text-indigo-400 transition-colors">Privacy Policy</a>

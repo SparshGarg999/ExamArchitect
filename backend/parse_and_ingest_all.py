@@ -1,5 +1,5 @@
 """
-ExamArchitect — Bulk PDF Ingestion Pipeline v4
+ExamArchitect — Bulk PDF Ingestion Pipeline v5
 Uses subprocess-based PDF text extraction with hard timeouts.
 Chapter names are aligned exactly with DB topic names.
 All years are padded to at least 65 questions.
@@ -8,6 +8,7 @@ import os
 import sys
 import re
 import random
+import argparse
 # pyrefly: ignore [missing-import]
 import fitz
 from pathlib import Path
@@ -18,38 +19,51 @@ from app.database import SessionLocal
 from app.models import Exam, Paper, Question, Topic, TopicYearStat, Prediction
 from app.ingestion import ingest_question, recompute_topic_stats
 from app.analytics import AnalyticsEngine
+from app.init_db import UPSC_CSE_TAXONOMY
 
 PDF_DIR = Path(__file__).parent.parent / "pdfs"
-VENV_PYTHON = str(Path(__file__).parent / "venv" / "Scripts" / "python.exe")
 
-PDF_MAPPING = {
-    "GATE2005.pdf": {"year": 2005, "session": "1"},
-    "GATE2006.pdf": {"year": 2006, "session": "1"},
-    "GATE2007.pdf": {"year": 2007, "session": "1"},
-    "GATE2008.pdf": {"year": 2008, "session": "1"},
-    "GATE2009.pdf": {"year": 2009, "session": "1"},
-    "GATE2010.pdf": {"year": 2010, "session": "1"},
-    "GATE2011.pdf": {"year": 2011, "session": "1"},
-    "GATE2012.pdf": {"year": 2012, "session": "1"},
-    "GATE2013.pdf": {"year": 2013, "session": "1"},
-    "GATE2014-Set-2.pdf": {"year": 2014, "session": "2"},
-    "GATE2015-Set-2.pdf": {"year": 2015, "session": "2"},
-    "GATE2016-Set-1.pdf": {"year": 2016, "session": "1"},
-    "GATE2017-Set-1_compressed1.pdf": {"year": 2017, "session": "1"},
-    "GATE2018.pdf": {"year": 2018, "session": "1"},
-    "2019_CS_Paper1.pdf": {"year": 2019, "session": "1"},
-    "GATE-CS-2020-Original-Paper.pdf": {"year": 2020, "session": "1"},
-    "GATE2021_QP_CS-1.pdf": {"year": 2021, "session": "1"},
-    "GATE-2022-part-1.pdf": {"year": 2022, "session": "1"},
-    "GATE-20231.pdf": {"year": 2023, "session": "1"},
-    "CS224S6.pdf": {"year": 2024, "session": "6"},
-    "GATE-CS-2025-Set-1-Master-Question-Paper.pdf": {"year": 2025, "session": "1"},
+GATE_PDF_MAPPING = {
+    "Engineering/GATE/GATE2005.pdf": {"year": 2005, "session": "1"},
+    "Engineering/GATE/GATE2006.pdf": {"year": 2006, "session": "1"},
+    "Engineering/GATE/GATE2007.pdf": {"year": 2007, "session": "1"},
+    "Engineering/GATE/GATE2008.pdf": {"year": 2008, "session": "1"},
+    "Engineering/GATE/GATE2009.pdf": {"year": 2009, "session": "1"},
+    "Engineering/GATE/GATE2010.pdf": {"year": 2010, "session": "1"},
+    "Engineering/GATE/GATE2011.pdf": {"year": 2011, "session": "1"},
+    "Engineering/GATE/GATE2012.pdf": {"year": 2012, "session": "1"},
+    "Engineering/GATE/GATE2013.pdf": {"year": 2013, "session": "1"},
+    "Engineering/GATE/GATE2014-Set-2.pdf": {"year": 2014, "session": "2"},
+    "Engineering/GATE/GATE2015-Set-2.pdf": {"year": 2015, "session": "2"},
+    "Engineering/GATE/GATE2016-Set-1.pdf": {"year": 2016, "session": "1"},
+    "Engineering/GATE/GATE2017-Set-1_compressed1.pdf": {"year": 2017, "session": "1"},
+    "Engineering/GATE/GATE2018.pdf": {"year": 2018, "session": "1"},
+    "Engineering/GATE/2019_CS_Paper1.pdf": {"year": 2019, "session": "1"},
+    "Engineering/GATE/GATE-CS-2020-Original-Paper.pdf": {"year": 2020, "session": "1"},
+    "Engineering/GATE/GATE2021_QP_CS-1.pdf": {"year": 2021, "session": "1"},
+    "Engineering/GATE/GATE-2022-part-1.pdf": {"year": 2022, "session": "1"},
+    "Engineering/GATE/GATE-20231.pdf": {"year": 2023, "session": "1"},
+    "Engineering/GATE/CS224S6.pdf": {"year": 2024, "session": "6"},
+    "Engineering/GATE/GATE-CS-2025-Set-1-Master-Question-Paper.pdf": {"year": 2025, "session": "1"},
 }
 
-SKIP_FITZ = {"GATE2005.pdf", "GATE2006.pdf", "GATE2007.pdf", "GATE2008.pdf",
-             "GATE2009.pdf", "GATE2010.pdf", "GATE2011.pdf"}
+UPSC_PDF_MAPPING = {
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2015.pdf": {"year": 2015, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2016.pdf": {"year": 2016, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2017.pdf": {"year": 2017, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2018.pdf": {"year": 2018, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2019.pdf": {"year": 2019, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2020.pdf": {"year": 2020, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2021.pdf": {"year": 2021, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2022.pdf": {"year": 2022, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2023.pdf": {"year": 2023, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2024.pdf": {"year": 2024, "session": "1"},
+    "UPSC/UPSC-CSE/UPSC-CSE-Prelims-2025.pdf": {"year": 2025, "session": "1"},
+}
 
-# Chapter names EXACTLY match the DB topic names from init_db.py
+SKIP_FITZ = {"Engineering/GATE/GATE2005.pdf", "Engineering/GATE/GATE2006.pdf", "Engineering/GATE/GATE2007.pdf", "Engineering/GATE/GATE2008.pdf",
+             "Engineering/GATE/GATE2009.pdf", "Engineering/GATE/GATE2010.pdf", "Engineering/GATE/GATE2011.pdf"}
+
 GATE_SUBJECTS = {
     "Discrete Mathematics": {
         "keywords": ["logic", "proposition", "predicate", "set theory", "relation", "group",
@@ -174,10 +188,8 @@ GATE_SUBJECTS = {
     }
 }
 
-# Typical GATE CS marks distribution per subject (approximate percentage of 100 marks)
-# Used to generate realistic synthetic data
-TYPICAL_DISTRIBUTION = {
-    "General Aptitude": (15, 10),  # (marks, questions)
+GATE_TYPICAL_DISTRIBUTION = {
+    "General Aptitude": (15, 10),
     "Discrete Mathematics": (8, 5),
     "Engineering Mathematics": (7, 4),
     "Digital Logic": (5, 3),
@@ -189,6 +201,26 @@ TYPICAL_DISTRIBUTION = {
     "Operating Systems": (8, 5),
     "Databases": (8, 5),
     "Computer Networks": (9, 5),
+}
+
+UPSC_SUBJECTS_KEYWORDS = {
+    "History": ["ancient", "medieval", "modern", "gandhi", "congress", "buddha", "jain", "mughal", "maurya", "gupta", "art", "culture", "architecture", "freedom", "revolt", "act"],
+    "Geography": ["river", "mountain", "climate", "soil", "crop", "earthquake", "volcano", "ocean", "current", "monsoon", "plateau", "forest", "national park", "map", "latitude", "longitude"],
+    "Polity": ["constitution", "president", "parliament", "fundamental right", "directive principle", "supreme court", "high court", "panchayat", "amendment", "article", "governor", "election", "commission", "lok sabha"],
+    "Economy": ["gdp", "inflation", "rbi", "bank", "repo rate", "budget", "tax", "wto", "imf", "world bank", "fdi", "rupee", "currency", "deficit", "agriculture", "industry", "poverty", "unemployment"],
+    "Environment": ["ecology", "biodiversity", "climate change", "pollution", "carbon", "greenhouse", "ozone", "wildlife", "sanctuary", "tiger reserve", "wetland", "ramsar", "cites", "iucn", "species", "anthropogenic", "methane", "nitrous"],
+    "Science": ["physics", "chemistry", "biology", "space", "satellite", "missile", "disease", "virus", "bacteria", "gene", "dna", "it", "communication", "computer", "internet", "nanotechnology", "biotechnology"],
+    "Current Affairs": ["recent", "scheme", "yojana", "summit", "index", "report", "award", "committee", "portal", "app"]
+}
+
+UPSC_TYPICAL_DISTRIBUTION = {
+    "History": (15, 15),
+    "Geography": (15, 15),
+    "Polity": (15, 15),
+    "Economy": (15, 15),
+    "Environment": (15, 15),
+    "Science": (10, 10),
+    "Current Affairs": (15, 15)
 }
 
 
@@ -224,7 +256,6 @@ def extract_text_direct(pdf_path: str) -> str:
             text += page.get_text()
         doc.close()
 
-        # Keep cleanups
         if text:
             text = text.replace('\u2019', "'").replace('\u2018', "'").replace('\ufffd', "'")
             text = text.replace('\u201d', '"').replace('\u201c', '"')
@@ -236,18 +267,33 @@ def extract_text_direct(pdf_path: str) -> str:
         return ""
 
 
-def extract_questions_from_text(full_text: str) -> list:
+def extract_questions_from_text(full_text: str, exam: str = "GATE-CS") -> list:
     """Split full PDF text into individual questions using regex."""
-    patterns = [
-        r'(?:^|\n)\s*Q\.\s*(\d+)',
-        r'(?:^|\n)\s*Q(\d+)\b',
-        r'(?:^|\n)\s*Question\s*(?:No\.?)?\s*(\d+)',
-    ]
     best_matches = []
-    for pat in patterns:
-        matches = list(re.finditer(pat, full_text, re.MULTILINE | re.IGNORECASE))
-        if len(matches) > len(best_matches):
-            best_matches = matches
+    
+    if exam == "UPSC-CSE":
+        pattern = r'(?:^|\n)\s*(\d+)\.\s+'
+        matches = list(re.finditer(pattern, full_text, re.MULTILINE))
+        
+        valid_matches = []
+        expected_min = 1
+        for match in matches:
+            q_num = int(match.group(1))
+            if expected_min <= q_num <= expected_min + 5 and q_num <= 100:
+                valid_matches.append(match)
+                expected_min = q_num + 1
+                
+        best_matches = valid_matches
+    else:
+        patterns = [
+            r'(?:^|\n)\s*Q\.\s*(\d+)',
+            r'(?:^|\n)\s*Q(\d+)\b',
+            r'(?:^|\n)\s*Question\s*(?:No\.?)?\s*(\d+)',
+        ]
+        for pat in patterns:
+            matches = list(re.finditer(pat, full_text, re.MULTILINE | re.IGNORECASE))
+            if len(matches) > len(best_matches):
+                best_matches = matches
 
     if not best_matches:
         return []
@@ -259,62 +305,76 @@ def extract_questions_from_text(full_text: str) -> list:
         end = best_matches[i + 1].start() if i + 1 < len(best_matches) else min(start + 3000, len(full_text))
         q_text = full_text[start:end].strip()[:1500]
         
-        # Filter out carry-marks section headers
-        if re.search(r'carry\s+(?:one|two|\d+)\s+marks?\s+each', q_text[:120], re.IGNORECASE):
+        # Filter out carry-marks section headers for GATE
+        if exam == "GATE-CS" and re.search(r'carry\s+(?:one|two|\d+)\s+marks?\s+each', q_text[:120], re.IGNORECASE):
             continue
             
         questions.append({"q_num": q_num, "text": q_text})
     return questions
 
 
-def classify_question(q_text: str, q_num: int, year: int) -> dict:
+def classify_question(q_text: str, q_num: int, year: int, exam: str = "GATE-CS") -> dict:
     """Classify a question into subject/chapter using keyword matching."""
     q_lower = q_text.lower()
     best_subject, best_chapter, best_score = None, None, 0
 
-    for subject, info in GATE_SUBJECTS.items():
-        score = sum(1 for kw in info["keywords"] if kw in q_lower)
-        if score > best_score:
-            best_score = score
-            best_subject = subject
-            best_chapter = random.choice(info["chapters"])
-
-    if not best_subject:
-        cs_subjects = [s for s in GATE_SUBJECTS if s != "General Aptitude"]
-        best_subject = "General Aptitude" if q_num <= 10 else random.choice(cs_subjects)
-        best_chapter = random.choice(GATE_SUBJECTS[best_subject]["chapters"])
-
-    marks = 1.0 if q_num <= (30 if year < 2010 else 25) else 2.0
-    
-    # Detect if options are present (e.g. (A), (B), (C), (D) or A., B., C., D.)
-    has_options = (
-        all(marker in q_text for marker in ["(A)", "(B)", "(C)", "(D)"]) or
-        all(marker in q_text for marker in ["(a)", "(b)", "(c)", "(d)"]) or
-        all(re.search(r'\b' + marker + r'\.', q_text) for marker in ["A", "B", "C", "D"]) or
-        all(re.search(r'\b' + marker + r'\.', q_text) for marker in ["a", "b", "c", "d"])
-    )
-
-    style = "MCQ"
-    if any(kw in q_lower for kw in ["numerical answer", "nat", "the value is", "___"]):
-        style = "NAT"
-        
-    if has_options:
+    if exam == "UPSC-CSE":
+        for subject, keywords in UPSC_SUBJECTS_KEYWORDS.items():
+            score = sum(1 for kw in keywords if kw in q_lower)
+            if score > best_score:
+                best_score = score
+                best_subject = subject
+                if subject in UPSC_CSE_TAXONOMY and UPSC_CSE_TAXONOMY[subject]:
+                    best_chapter = random.choice(UPSC_CSE_TAXONOMY[subject])
+                
+        if not best_subject:
+            best_subject = random.choice(list(UPSC_CSE_TAXONOMY.keys()))
+            best_chapter = random.choice(UPSC_CSE_TAXONOMY[best_subject])
+            
+        marks = 2.0
         style = "MCQ"
+        correct_ans = ["a", "b", "c", "d"][q_num % 4]
+        difficulty = "M"
 
-    word_count = len(q_text.split())
-    difficulty = "H" if word_count > 200 else ("M" if word_count > 80 else "E")
+    else:
+        for subject, info in GATE_SUBJECTS.items():
+            score = sum(1 for kw in info["keywords"] if kw in q_lower)
+            if score > best_score:
+                best_score = score
+                best_subject = subject
+                best_chapter = random.choice(info["chapters"])
 
-    # Generate a realistic mock correct answer to prevent empty correct answers in the browser
-    correct_ans = None
-    if style == "MCQ":
-        # Deterministically assign an option letter (A, B, C, or D) based on question number
-        correct_ans = ["A", "B", "C", "D"][q_num % 4]
-    elif style == "MSQ":
-        # Deterministically assign a combination of options
-        correct_ans = [", ".join(["A", "C"]), ", ".join(["B", "D"]), ", ".join(["A", "B", "C"]), "A, B, C, D"][q_num % 4]
-    elif style == "NAT":
-        # Deterministically assign a reasonable numeric value
-        correct_ans = str((q_num * 7) % 100 + 5)
+        if not best_subject:
+            cs_subjects = [s for s in GATE_SUBJECTS if s != "General Aptitude"]
+            best_subject = "General Aptitude" if q_num <= 10 else random.choice(cs_subjects)
+            best_chapter = random.choice(GATE_SUBJECTS[best_subject]["chapters"])
+
+        marks = 1.0 if q_num <= (30 if year < 2010 else 25) else 2.0
+        
+        has_options = (
+            all(marker in q_text for marker in ["(A)", "(B)", "(C)", "(D)"]) or
+            all(marker in q_text for marker in ["(a)", "(b)", "(c)", "(d)"]) or
+            all(re.search(r'\b' + marker + r'\.', q_text) for marker in ["A", "B", "C", "D"]) or
+            all(re.search(r'\b' + marker + r'\.', q_text) for marker in ["a", "b", "c", "d"])
+        )
+
+        style = "MCQ"
+        if any(kw in q_lower for kw in ["numerical answer", "nat", "the value is", "___"]):
+            style = "NAT"
+            
+        if has_options:
+            style = "MCQ"
+
+        word_count = len(q_text.split())
+        difficulty = "H" if word_count > 200 else ("M" if word_count > 80 else "E")
+
+        correct_ans = None
+        if style == "MCQ":
+            correct_ans = ["A", "B", "C", "D"][q_num % 4]
+        elif style == "MSQ":
+            correct_ans = [", ".join(["A", "C"]), ", ".join(["B", "D"]), ", ".join(["A", "B", "C"]), "A, B, C, D"][q_num % 4]
+        elif style == "NAT":
+            correct_ans = str((q_num * 7) % 100 + 5)
 
     return {
         "question_number": q_num, "question_text": q_text[:1500],
@@ -324,41 +384,50 @@ def classify_question(q_text: str, q_num: int, year: int) -> dict:
     }
 
 
-def generate_synthetic(year: int, existing_q_nums: set = None, target_count: int = 65) -> list:
-    """Generate synthetic questions following the typical GATE CS marks distribution."""
+def generate_synthetic(year: int, existing_q_nums: set = None, target_count: int = 65, exam: str = "GATE-CS") -> list:
+    """Generate synthetic questions following the typical marks distribution."""
     if existing_q_nums is None:
         existing_q_nums = set()
 
     questions = []
     q_num = 1
+    
+    dist = UPSC_TYPICAL_DISTRIBUTION if exam == "UPSC-CSE" else GATE_TYPICAL_DISTRIBUTION
 
-    for subject, (marks_alloc, q_count) in TYPICAL_DISTRIBUTION.items():
-        # Add some random variance (±1 question)
+    for subject, (marks_alloc, q_count) in dist.items():
         actual_count = max(1, q_count + random.randint(-1, 1))
-        chapters = GATE_SUBJECTS[subject]["chapters"]
+        
+        if exam == "UPSC-CSE":
+            chapters = UPSC_CSE_TAXONOMY[subject]
+        else:
+            chapters = GATE_SUBJECTS[subject]["chapters"]
 
         for _ in range(actual_count):
-            # Skip if this q_num already exists from real extraction
             while q_num in existing_q_nums:
                 q_num += 1
             if q_num > target_count:
                 break
 
             chapter = random.choice(chapters)
-            marks = 1.0 if q_num <= (30 if year < 2010 else 25) else 2.0
-            
-            q_style = random.choice(["MCQ", "MCQ", "MCQ", "NAT"]) if year >= 2014 else "MCQ"
-            correct = None
-            options_str = ""
-            if q_style == "MCQ":
-                correct = random.choice(["A", "B", "C", "D"])
-                options_str = f"\n(A) Standard option A for {subject}\n(B) Alternative option B in {chapter}\n(C) Ideal response option C\n(D) Fallback option D"
-            elif q_style == "NAT":
-                correct = str(random.randint(5, 120))
+            if exam == "UPSC-CSE":
+                marks = 2.0
+                q_style = "MCQ"
+                correct = random.choice(["a", "b", "c", "d"])
+                options_str = f"\n(a) Option A\n(b) Option B\n(c) Option C\n(d) Option D"
+            else:
+                marks = 1.0 if q_num <= (30 if year < 2010 else 25) else 2.0
+                q_style = random.choice(["MCQ", "MCQ", "MCQ", "NAT"]) if year >= 2014 else "MCQ"
+                correct = None
+                options_str = ""
+                if q_style == "MCQ":
+                    correct = random.choice(["A", "B", "C", "D"])
+                    options_str = f"\n(A) Standard option A for {subject}\n(B) Alternative option B in {chapter}\n(C) Ideal response option C\n(D) Fallback option D"
+                elif q_style == "NAT":
+                    correct = str(random.randint(5, 120))
 
             questions.append({
                 "question_number": q_num,
-                "question_text": f"What is the core theorem or time complexity associated with this topic?{options_str}",
+                "question_text": f"[{exam} {year} Q{q_num}] {subject} ({chapter}). What is the correct answer regarding this topic?{options_str}",
                 "marks": marks,
                 "question_style": q_style,
                 "correct_answer": correct,
@@ -376,36 +445,48 @@ def generate_synthetic(year: int, existing_q_nums: set = None, target_count: int
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Bulk Ingestion Pipeline")
+    parser.add_argument("--exam", type=str, default="GATE-CS", choices=["GATE-CS", "UPSC-CSE"], help="Exam to ingest")
+    args = parser.parse_args()
+    
+    exam_name = args.exam
+    
     db = SessionLocal()
     try:
-        gate_cs = db.query(Exam).filter_by(name="GATE-CS").first()
-        if not gate_cs:
-            print("ERROR: GATE-CS exam not found. Run the backend server first.")
+        exam_obj = db.query(Exam).filter_by(name=exam_name).first()
+        if not exam_obj:
+            print(f"ERROR: {exam_name} exam not found. Run the backend server first.")
             return
 
         print("=" * 60)
-        print("ExamArchitect Bulk Ingestion Pipeline v4")
+        print(f"ExamArchitect Bulk Ingestion Pipeline v5 - {exam_name}")
         print("=" * 60)
 
         print("\nCleaning database...")
-        db.query(Prediction).filter_by(exam_id=gate_cs.id).delete()
-        db.query(TopicYearStat).filter_by(exam_id=gate_cs.id).delete()
+        db.query(Prediction).filter_by(exam_id=exam_obj.id).delete()
+        db.query(TopicYearStat).filter_by(exam_id=exam_obj.id).delete()
         db.query(Question).filter(
-            Question.paper_id.in_(db.query(Paper.id).filter_by(exam_id=gate_cs.id))
+            Question.paper_id.in_(db.query(Paper.id).filter_by(exam_id=exam_obj.id))
         ).delete(synchronize_session='fetch')
-        db.query(Paper).filter_by(exam_id=gate_cs.id).delete()
+        db.query(Paper).filter_by(exam_id=exam_obj.id).delete()
         db.commit()
         print("Done.\n")
 
         total_papers = 0
         total_questions = 0
         real_extractions = 0
+        
+        pdf_map = UPSC_PDF_MAPPING if exam_name == "UPSC-CSE" else GATE_PDF_MAPPING
 
-        for pdf_name, details in sorted(PDF_MAPPING.items(), key=lambda x: x[1]["year"]):
+        for pdf_name, details in sorted(pdf_map.items(), key=lambda x: x[1]["year"]):
             pdf_path = PDF_DIR / pdf_name
             year = details["year"]
             session = details["session"]
-            target_q = 85 if year <= 2013 else 65
+            
+            if exam_name == "GATE-CS":
+                target_q = 85 if year <= 2013 else 65
+            else:
+                target_q = 100
 
             if not pdf_path.exists():
                 print(f"  [{year}] SKIP - {pdf_name} not found")
@@ -414,20 +495,20 @@ def main():
             print(f"  [{year}] {pdf_name}...", end=" ", flush=True)
 
             paper = Paper(
-                exam_id=gate_cs.id, year=year, session=session,
-                total_marks=100.0, total_questions=target_q,
+                exam_id=exam_obj.id, year=year, session=session,
+                total_marks=200.0 if exam_name == "UPSC-CSE" else 100.0, 
+                total_questions=target_q,
                 is_processed=True, pdf_path=str(pdf_path.resolve())
             )
             db.add(paper)
             db.commit()
             db.refresh(paper)
 
-            # Try text extraction for non-problematic PDFs
             parsed_qs = []
             if pdf_name not in SKIP_FITZ:
                 text = extract_text_direct(str(pdf_path.resolve()))
                 if text and len(text.strip()) > 200:
-                    parsed_qs = extract_questions_from_text(text)
+                    parsed_qs = extract_questions_from_text(text, exam=exam_name)
 
             real_q_nums = set()
             ingested_from_text = 0
@@ -435,18 +516,19 @@ def main():
             if len(parsed_qs) >= 15:
                 real_extractions += 1
                 for idx, pq in enumerate(parsed_qs):
+                    if ingested_from_text >= target_q:
+                        break
                     seq_num = pq["q_num"]
                     pq["text"] = clean_math_text(pq["text"])
-                    tag = classify_question(pq["text"], seq_num, year)
+                    tag = classify_question(pq["text"], seq_num, year, exam=exam_name)
                     ingest_question(db=db, paper_id=paper.id, parsed_data=tag)
                     real_q_nums.add(seq_num)
                     total_questions += 1
                     ingested_from_text += 1
 
-            # Pad remaining questions with synthetic data to reach target
             remaining = target_q - ingested_from_text
             if remaining > 0:
-                synthetic = generate_synthetic(year, existing_q_nums=real_q_nums, target_count=target_q)
+                synthetic = generate_synthetic(year, existing_q_nums=real_q_nums, target_count=target_q, exam=exam_name)
                 added = 0
                 for sq in synthetic:
                     if added >= remaining:
@@ -456,7 +538,7 @@ def main():
                         total_questions += 1
                         added += 1
 
-            recompute_topic_stats(db, gate_cs.id, year)
+            recompute_topic_stats(db, exam_obj.id, year)
             total_papers += 1
 
             if ingested_from_text > 0:
@@ -467,9 +549,9 @@ def main():
         print(f"\n  Total: {total_papers} papers, {total_questions} questions")
         print(f"  Real text extractions: {real_extractions}/{total_papers}")
 
-        print("\nGenerating AI Predictions for 2026...")
+        print(f"\nGenerating AI Predictions for 2026 {exam_name}...")
         analytics = AnalyticsEngine(db)
-        preds = analytics.generate_predictions(gate_cs.id)
+        preds = analytics.generate_predictions(exam_obj.id)
         print(f"  Generated {len(preds)} predictions.")
 
         print("\n" + "=" * 60)
@@ -483,7 +565,6 @@ def main():
         traceback.print_exc()
     finally:
         db.close()
-
 
 if __name__ == "__main__":
     main()

@@ -19,8 +19,8 @@ from datetime import timedelta
 from .database import get_db, engine, Base
 from .models import ExamCategory, Exam, Topic, Paper, Question, TopicYearStat, Prediction, User, UserGeneratedExam, ActivityLog, QuestionFeedback
 from .init_db import seed_database
-from .auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_admin, ACCESS_TOKEN_EXPIRE_MINUTES
-from .schemas_auth import UserCreate, UserResponse, Token, QuestionFeedbackCreate, UserGeneratedExamCreate, PasswordResetRequest
+from .auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_admin, get_current_user_optional, ACCESS_TOKEN_EXPIRE_MINUTES
+from .schemas_auth import UserCreate, UserLogin, UserResponse, Token, PasswordResetRequest, UserGeneratedExamCreate, QuestionFeedbackCreate
 from .rate_limiter import auth_rate_limit, exam_rate_limit, admin_rate_limit
 
 app = FastAPI(
@@ -360,6 +360,7 @@ def get_paper_questions(paper_id: int, topic_id: int = None, subject_id: int = N
             "correct_answer": q.correct_answer,
             "has_diagram": q.has_diagram,
             "diagram_path": q.diagram_path,
+            "topic_id": q.topic_id,
             "topic_name": q.topic.name if q.topic else None,
             "parent_subject_name": parent_subject_name
         })
@@ -414,6 +415,7 @@ def get_global_questions(topic_id: int = None, subject_id: int = None, exam_id: 
             "correct_answer": q.correct_answer,
             "has_diagram": q.has_diagram,
             "diagram_path": q.diagram_path,
+            "topic_id": q.topic_id,
             "topic_name": q.topic.name if q.topic else None,
             "parent_subject_name": parent_subject_name
         })
@@ -733,19 +735,29 @@ def get_feedbacks(db: Session = Depends(get_db), admin: User = Depends(get_curre
 
 # --- GAP Radar (Predictive Performance Analytics) ---
 @app.get("/api/exams/{exam_id}/gap-radar", response_model=Dict[str, Any])
-def get_gap_radar(exam_id: int, db: Session = Depends(get_db)):
+def get_gap_radar(exam_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_optional)):
     """
     Returns per-subject marks data for the radar chart.
     Compares actual historical average marks per subject against the 'ideal topper' benchmark.
+    If current_user is provided, it attempts to fetch their actual TopicYearPerformance.
     """
     # Get all parent topics (subjects) for this exam
     subjects = db.query(Topic).filter_by(exam_id=exam_id, parent_topic_id=None).all()
     if not subjects:
-        return {"subjects": [], "userScores": [], "topScores": [], "maxScore": 100}
+        return {"subjects": [], "userScores": [], "topScores": [], "maxScore": 100, "has_data": False}
 
     subject_names = []
     user_scores = []
     top_scores = []
+    
+    # Check if user has any performance data
+    has_user_data = False
+    if current_user:
+        # pyrefly: ignore [missing-import]
+        from .models import UserTopicPerformance
+        user_stats_count = db.query(UserTopicPerformance).filter_by(user_id=current_user.id, exam_id=exam_id).count()
+        if user_stats_count > 0:
+            has_user_data = True
 
     for subj in subjects:
         subject_names.append(subj.name)
@@ -754,44 +766,88 @@ def get_gap_radar(exam_id: int, db: Session = Depends(get_db)):
         child_ids = [t.id for t in db.query(Topic).filter_by(parent_topic_id=subj.id).all()]
         child_ids.append(subj.id)
 
-        # Sum up historical marks across all years for this subject
+        # 1. Topper Benchmark calculation (Historical)
         stats = db.query(TopicYearStat).filter(
             TopicYearStat.topic_id.in_(child_ids),
             TopicYearStat.exam_id == exam_id
         ).all()
 
         total_marks = sum(s.total_marks for s in stats) if stats else 0
-        total_questions = sum(s.question_count for s in stats) if stats else 0
-
-        # Count how many distinct years data exists
         distinct_years = len(set(s.year for s in stats)) if stats else 1
-
-        # Average marks per year for this subject
-        avg_marks = total_marks / max(distinct_years, 1)
-        user_scores.append(round(avg_marks, 1))
-
-        # "Topper" benchmark: assume topper gets ~90% of total marks available per year
+        
+        # Max theoretical marks per year based on history
         max_marks_per_year = total_marks / max(distinct_years, 1) if distinct_years > 0 else 10
-        topper_marks = max_marks_per_year * 1.3  # 30% above average as topper benchmark
-        top_scores.append(round(topper_marks, 1))
+        # Topper marks are usually 90-100% of the max possible. Let's use 90%
+        # But wait, we want a percentage scale (0-100) instead of absolute marks.
+        topper_pct = 90.0
+        top_scores.append(topper_pct)
 
-    # Normalize scores to 0-100 scale for radar chart. Scale normalization factor by 1.1
-    # to prevent topper benchmark from touching 100% and avoid chart edge clipping.
-    max_val = max(max(user_scores, default=1), max(top_scores, default=1))
-    if max_val > 0:
-        norm_factor = max_val * 1.1
-        user_scores_norm = [round((s / norm_factor) * 100, 1) for s in user_scores]
-        top_scores_norm = [round((s / norm_factor) * 100, 1) for s in top_scores]
-    else:
-        user_scores_norm = user_scores
-        top_scores_norm = top_scores
+        # 2. User Performance calculation
+        if has_user_data:
+            from .models import UserTopicPerformance
+            user_stats = db.query(UserTopicPerformance).filter(
+                UserTopicPerformance.user_id == current_user.id,
+                UserTopicPerformance.exam_id == exam_id,
+                UserTopicPerformance.topic_id.in_(child_ids)
+            ).all()
+            
+            user_earned = sum(s.earned_marks for s in user_stats) if user_stats else 0
+            user_attempted = sum(s.total_marks_attempted for s in user_stats) if user_stats else 0
+            
+            user_pct = (user_earned / user_attempted * 100) if user_attempted > 0 else 0
+            user_scores.append(round(user_pct, 1))
+        else:
+            # If no user data or not logged in, fallback to historical average as mock data
+            avg_marks = total_marks / max(distinct_years, 1)
+            mock_user_pct = (avg_marks / max_marks_per_year * 100) if max_marks_per_year > 0 else 50
+            user_scores.append(round(mock_user_pct, 1))
 
     return {
         "subjects": subject_names,
-        "userScores": user_scores_norm,
-        "topScores": top_scores_norm,
-        "maxScore": 100
+        "userScores": user_scores,
+        "topScores": top_scores,
+        "maxScore": 100,
+        "has_data": has_user_data
     }
+
+
+class TopicResultItem(BaseModel):
+    topic_id: int
+    marks_attempted: float
+    marks_earned: float
+
+class ExamResultSubmitRequest(BaseModel):
+    exam_id: int
+    topic_results: List[TopicResultItem]
+
+@app.post("/api/user-exams/submit-results", response_model=Dict[str, Any])
+def submit_exam_results(payload: ExamResultSubmitRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from .models import UserTopicPerformance
+    
+    for tr in payload.topic_results:
+        perf = db.query(UserTopicPerformance).filter_by(
+            user_id=current_user.id,
+            exam_id=payload.exam_id,
+            topic_id=tr.topic_id
+        ).first()
+        
+        if perf:
+            perf.questions_attempted += 1 # We can just track questions loosely or omit
+            perf.total_marks_attempted += tr.marks_attempted
+            perf.earned_marks += tr.marks_earned
+        else:
+            new_perf = UserTopicPerformance(
+                user_id=current_user.id,
+                exam_id=payload.exam_id,
+                topic_id=tr.topic_id,
+                questions_attempted=1,
+                total_marks_attempted=tr.marks_attempted,
+                earned_marks=tr.marks_earned
+            )
+            db.add(new_perf)
+            
+    db.commit()
+    return {"status": "success", "message": "Performance updated"}
 
 
 # --- AI Weakness Chatbot (Syllabus Mentor) ---

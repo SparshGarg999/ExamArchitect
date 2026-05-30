@@ -14,7 +14,7 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
 
     // 1. Setup Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    
+
     // Ambient Light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
     scene.add(ambientLight);
@@ -31,7 +31,7 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
 
     // Camera
     const camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
-    camera.position.z = 280;
+    camera.position.z = 310;
 
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -68,7 +68,7 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
       { startLat: 40.7128, startLng: -74.0060, endLat: 12.9716, endLng: 77.5946, color: '#818cf8', altitude: 0.3 },
       { startLat: 51.5074, startLng: -0.1278, endLat: 35.6762, endLng: 139.6503, color: '#ec4899', altitude: 0.28 },
       { startLat: 12.9716, startLng: 77.5946, endLat: -33.8688, endLng: 151.2093, color: '#06b6d4', altitude: 0.22 },
-      { startLat: 35.6762, startLng: 139.6503, endLat: 37.7749, startLng: -122.4194, color: '#f59e0b', altitude: 0.32 }
+      { startLat: 35.6762, startLng: 139.6503, endLat: 37.7749, endLng: -122.4194, color: '#f59e0b', altitude: 0.32 }
     ];
 
     // Configure points (markers)
@@ -110,7 +110,7 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
     // 3. Animation and Drag rotation
     let isMouseDown = false;
     let previousMousePosition = { x: 0, y: 0 };
-    
+
     // Gentle tilt on startup
     globe.rotation.x = 0.3;
     globe.rotation.y = 0.8;
@@ -169,7 +169,7 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
   }, [width, height]);
 
   return (
-    <div 
+    <div
       className="github-globe-wrapper"
       style={{
         position: 'relative',
@@ -178,9 +178,19 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: 'grab'
+        cursor: 'grab',
+        maxWidth: '100%'
       }}
     >
+      <style>
+        {`
+          .github-globe-wrapper canvas {
+            max-width: 100% !important;
+            height: auto !important;
+            outline: none;
+          }
+        `}
+      </style>
       {loading && (
         <div style={{ position: 'absolute', color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span className="btn-spinner"></span> Loading 3D Globe...

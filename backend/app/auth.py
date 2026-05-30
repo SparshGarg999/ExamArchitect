@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 # pyrefly: ignore [missing-import]
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 # pyrefly: ignore [missing-import]
 from fastapi.security import OAuth2PasswordBearer
 # pyrefly: ignore [missing-import]
@@ -67,6 +67,29 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+# pyrefly: ignore [missing-import]
+from fastapi.security.utils import get_authorization_scheme_param
+
+def get_current_user_optional(request: Request, db: Session = Depends(get_db)):
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        return None
+    scheme, token = get_authorization_scheme_param(authorization)
+    if authorization is None or scheme.lower() != "bearer":
+        return None
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            return None
+    except JWTError:
+        return None
+    
+    user = db.query(User).filter(User.email == email).first()
+    return user
+
 
 def get_current_admin(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":

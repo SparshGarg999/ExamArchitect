@@ -2,7 +2,7 @@
 import fitz
 import re
 
-pdf_path = "../pdfs/GATE-CS-2025-Set-1-Master-Question-Paper.pdf"
+pdf_path = "../pdfs/Engineering/GATE/GATE-CS-2025-Set-1-Master-Question-Paper.pdf"
 doc = fitz.open(pdf_path)
 
 print("Total pages:", len(doc))

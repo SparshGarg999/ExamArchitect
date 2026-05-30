@@ -1,9 +1,8 @@
-import React from 'react';
-import { Shield, Lock, EyeOff, Server } from 'lucide-react';
+import { Shield, EyeOff, Server } from 'lucide-react';
 
 export default function PrivacyPolicy() {
   return (
-    <div className="container mx-auto px-4 py-12 max-w-4xl animate-fade-in">
+    <div className="container mx-auto px-4 py-12 pt-28 max-w-4xl animate-fade-in">
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold font-display text-white mb-4">Privacy Policy</h1>
         <p className="text-slate-400">Transparency and ethics in our open-source predictive platform.</p>

@@ -88,12 +88,11 @@ function QuestionFeedback({ questionId }) {
   const [type, setType] = useState('Error in Question');
   const [comment, setComment] = useState('');
   const [status, setStatus] = useState(''); // 'sending', 'sent', 'error'
-  const { currentUser } = useAuth();
+  const { currentUser, token } = useAuth();
 
   const handleSubmit = async () => {
     if (!comment.trim()) return;
     setStatus('sending');
-    const token = localStorage.getItem('token');
 
     try {
       const res = await fetch(`${API_BASE}/api/questions/${questionId}/feedback`, {
@@ -102,14 +101,11 @@ function QuestionFeedback({ questionId }) {
           'Content-Type': 'application/json',
           ...(token && { 'Authorization': `Bearer ${token}` })
         },
-        body: JSON.stringify({ feedback_type: type, comments: comment })
+        body: JSON.stringify({ feedback_type: type, comment }),
       });
-      if (res.ok) {
-        setStatus('sent');
-        setTimeout(() => setOpen(false), 2000);
-      } else {
-        setStatus('error');
-      }
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      setStatus('sent');
+      setTimeout(() => setOpen(false), 2000);
     } catch {
       setStatus('error');
     }
@@ -131,31 +127,41 @@ function QuestionFeedback({ questionId }) {
           ) : status === 'sent' ? (
             <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle size={14} /> Feedback submitted successfully. Thank you!</p>
           ) : (
-            <div className="flex flex-col gap-3">
-              <select
-                value={type}
-                onChange={e => setType(e.target.value)}
-                className="bg-black/50 border border-white/10 rounded px-3 py-1.5 text-xs text-white outline-none"
-              >
-                <option>Error in Question</option>
-                <option>Wrong Answer Key</option>
-                <option>Formatting Issue</option>
-                <option>Other</option>
-              </select>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap gap-2">
+                {['Error in Question', 'Wrong Answer Key', 'Formatting Issue', 'Other'].map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => setType(opt)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                      type === opt 
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' 
+                        : 'bg-black/40 border-white/10 text-slate-400 hover:border-white/20 hover:text-slate-300'
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
               <textarea
                 value={comment}
                 onChange={e => setComment(e.target.value)}
-                placeholder="Describe the issue..."
-                className="bg-black/50 border border-white/10 rounded p-2 text-xs text-white outline-none min-h-[60px]"
+                placeholder={`Provide details about the "${type}" issue...`}
+                className="bg-black/50 border border-white/10 focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/40 rounded p-3 text-sm text-white outline-none min-h-[80px] transition-all resize-y"
               />
-              <button
-                onClick={handleSubmit}
-                disabled={status === 'sending'}
-                className="self-end bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 px-3 py-1.5 rounded text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
-              >
-                <Send size={12} /> {status === 'sending' ? 'Sending...' : 'Submit'}
-              </button>
-              {status === 'error' && <p className="text-xs text-rose-400">Failed to submit feedback. Try again.</p>}
+              <div className="flex justify-between items-center">
+                {status === 'error' ? (
+                  <p className="text-xs text-rose-400">Failed to submit feedback. Try again.</p>
+                ) : <span />}
+                
+                <button
+                  onClick={handleSubmit}
+                  disabled={status === 'sending' || !comment.trim()}
+                  className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-500 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Send size={14} /> {status === 'sending' ? 'Sending...' : 'Submit Feedback'}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -167,15 +173,12 @@ function QuestionFeedback({ questionId }) {
 export default function Dashboard({ addToast }) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, token } = useAuth();
 
   const [selectedExam, setSelectedExam] = useState(null);
   const [activeTab, setActiveTab] = useState('heatmap');
   const [loading, setLoading] = useState(true);
-
-  // Seeding states
-  const [seeding, setSeeding] = useState(false);
-  const [seedMessage, setSeedMessage] = useState(null);
+  const [reportData, setReportData] = useState(null);
 
   // Data states
   const [heatmapData, setHeatmapData] = useState(null);
@@ -217,9 +220,9 @@ export default function Dashboard({ addToast }) {
   const [studyStreak, setStudyStreak] = useState(() => {
     try {
       const saved = localStorage.getItem('studyPlannerStreak');
-      return saved ? parseInt(saved) : 4;
+      return saved ? parseInt(saved) : 0;
     } catch {
-      return 4;
+      return 0;
     }
   });
 
@@ -269,10 +272,9 @@ export default function Dashboard({ addToast }) {
 
   const loadExamData = useCallback(() => {
     setLoading(true);
-    fetch(`${API_BASE}/api/exams?category_id=1`)
-      .then(res => res.json())
-      .then(exams => {
-        const ex = exams.find(e => e.id === parseInt(id)) || { id, full_name: 'Exam', name: 'EXAM' };
+    fetch(`${API_BASE}/api/exams/${id}`)
+      .then(res => res.ok ? res.json() : { id, full_name: 'Exam', name: 'EXAM' })
+      .then(ex => {
         setSelectedExam(ex);
 
         Promise.all([
@@ -291,7 +293,8 @@ export default function Dashboard({ addToast }) {
             setLoading(false);
           })
           .catch(err => {
-            console.error(err);
+            console.error('[Dashboard] loadExamData:', err.message);
+            addToast?.('Failed to load exam data.', 'error');
             setLoading(false);
           });
       });
@@ -311,9 +314,15 @@ export default function Dashboard({ addToast }) {
     let url = selectedPaper ? `${API_BASE}/api/papers/${selectedPaper.id}/questions${queryStr}` : `${API_BASE}/api/questions${queryStr}`;
 
     fetch(url)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return res.json();
+      })
       .then(data => setQuestions(data))
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error('[Dashboard] fetchQuestionsList:', err.message);
+        addToast?.('Failed to load questions.', 'error');
+      });
   }, [id, selectedPaper, questionSubjectFilter, questionSearch]);
 
   useEffect(() => {
@@ -350,34 +359,6 @@ export default function Dashboard({ addToast }) {
     }
   }, [selectedHeatmapTopic, id]);
 
-  const handleReseed = async () => {
-    if (seeding) return;
-    setSeeding(true);
-    setSeedMessage({ type: 'info', text: 'Seeding 10 years of historical data from PDF blueprints... This takes a moment.' });
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`${API_BASE}/api/ingest/bulk`, { 
-        method: 'POST',
-        headers: {
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSeedMessage({ type: 'success', text: `Seeding complete! Ingested ${data.questions_ingested} questions. Reloading data...` });
-        loadExamData();
-      } else if (res.status === 401 || res.status === 403) {
-        setSeedMessage({ type: 'error', text: 'Security Error: You must be logged in as an Administrator to reset and re-seed the system.' });
-      } else {
-        setSeedMessage({ type: 'error', text: 'Ingestion pipeline encountered a backend subprocess error.' });
-      }
-    } catch {
-      setSeedMessage({ type: 'error', text: 'Network failure communicating with bulk ingestion API.' });
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   const handleToggleSubject = (subjectRow) => {
     const subjectId = subjectRow.id;
     const isCurrentlyExpanded = expandedSubjects[subjectId];
@@ -400,31 +381,32 @@ export default function Dashboard({ addToast }) {
 
   const handleUpdateStudyPlan = async () => {
     if (!currentUser) {
-      alert("Please login to generate custom study plans.");
+      addToast?.('Please login to generate custom study plans.', 'error');
       return;
     }
-    const token = localStorage.getItem('token');
     try {
+      // Only send the fields the API requires
       const body = {
         total_days: parseInt(studyPlanDays) || 30,
-        weakness_topics: studyPlanWeaknesses ? studyPlanWeaknesses.split(',').map(s => s.trim()).filter(Boolean) : null
+        weakness_topics: studyPlanWeaknesses ? studyPlanWeaknesses.split(',').map(s => s.trim()).filter(Boolean) : null,
       };
       const res = await fetch(`${API_BASE}/api/exams/${id}/study-plan`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token && { Authorization: `Bearer ${token}` }),
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setStudyPlan(data);
-      } else {
-        alert("Failed to generate plan");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.detail || 'Failed to generate plan');
       }
+      const data = await res.json();
+      setStudyPlan(data);
     } catch (err) {
-      console.error(err);
+      console.error('[Dashboard] handleUpdateStudyPlan:', err.message);
+      addToast?.(err.message || 'Failed to generate study plan.', 'error');
     }
   };
 
@@ -546,7 +528,7 @@ export default function Dashboard({ addToast }) {
           e.stopPropagation();
           setSelectedHeatmapTopic(topic);
         }}
-        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border ${borderStyle} transition-all hover:scale-[1.05] hover:border-white/30 relative group cursor-pointer ${marks > 7 ? 'shadow-md shadow-rose-950/20 animate-pulse-slow' : ''}`}
+        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border ${borderStyle} transition-all hover:scale-[1.05] hover:border-white/30 hover:z-[60] relative group cursor-pointer ${marks > 7 ? 'shadow-md shadow-rose-950/20 animate-pulse-slow' : ''}`}
       >
         {cellContent}
         
@@ -653,7 +635,6 @@ export default function Dashboard({ addToast }) {
       )}
 
       {/* Header Banner */}
-      {/* Header Banner */}
       <div 
         className="glass-panel p-6 mb-8 border-l-4 flex flex-wrap justify-between items-center gap-6 bg-[#121420]/80 transition-all duration-300"
         style={{ borderLeftColor: accentColorMap[themeAccent].primary }}
@@ -689,7 +670,15 @@ export default function Dashboard({ addToast }) {
           </div>
           
           <StatCard title="Database Papers" value={`${papers.length} Years`} color={themeAccent} />
-          <StatCard title="AI Confidence" value="94.2%" color="emerald" />
+          <StatCard 
+            title="AI Confidence" 
+            value={
+              predictions.length > 0 
+                ? (predictions.reduce((acc, p) => acc + (1 - (p.confidence_high - p.confidence_low)), 0) / predictions.length * 100).toFixed(1) + '%' 
+                : 'N/A'
+            } 
+            color="emerald" 
+          />
         </div>
       </div>
 
@@ -798,27 +787,8 @@ export default function Dashboard({ addToast }) {
                     ))}
                   </div>
                 )}
-
-                <button 
-                  onClick={handleReseed}
-                  disabled={seeding}
-                  className="bg-white/5 hover:bg-white/10 text-white font-bold py-2 px-4 rounded-xl border border-white/10 text-xs flex items-center gap-2 cursor-pointer disabled:opacity-50 h-[34px]"
-                >
-                  {seeding ? <RefreshCw className="animate-spin" size={12} /> : null}
-                  {seeding ? 'Ingesting...' : 'Reset & Re-seed'}
-                </button>
               </div>
             </div>
-
-            {seedMessage && (
-              <div className={`p-4 rounded-xl mb-6 text-sm border ${
-                seedMessage.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
-                seedMessage.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' :
-                'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
-              }`}>
-                {seedMessage.text}
-              </div>
-            )}
 
             <div>
               {heatmapData && heatmapData.data?.length > 0 ? (
@@ -1407,7 +1377,7 @@ export default function Dashboard({ addToast }) {
                   }
                 })()
               ) : (
-                <p className="text-center text-slate-400 py-10">No heatmap data available. Click "Reset & Re-seed" above.</p>
+                <p className="text-center text-slate-400 py-10">Data is currently being curated.</p>
               )}
             </div>
 
@@ -1525,7 +1495,7 @@ export default function Dashboard({ addToast }) {
             <h3 className="text-xl font-bold mb-6 text-white font-display">Upcoming Exam Probability Analysis</h3>
             
             {predictions.length === 0 ? (
-              <p className="text-center text-slate-400 py-10 glass-panel bg-[#121420]/60">No probability predictions computed yet. Seed historical data first.</p>
+              <p className="text-center text-slate-400 py-10 glass-panel bg-[#121420]/60">Data is currently being curated.</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {predictions.slice((predCurrentPage - 1) * predsPerPage, predCurrentPage * predsPerPage).map((pred, i) => {
@@ -1632,10 +1602,31 @@ export default function Dashboard({ addToast }) {
 
       {/* STUDY PLAN TAB */}
       {activeTab === 'studyplan' && (
-        <div className="space-y-8 animate-fade-in">
-          {/* Gamified Mastery Tracker (Header) */}
-          {studyPlan.length > 0 && (() => {
-            let totalTasks = 0;
+        <div className="space-y-8 animate-fade-in relative group">
+          {!currentUser && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#121420]/80 backdrop-blur-sm rounded-2xl border border-white/10 transition-all duration-300">
+              <div className="bg-[#1e2336] p-6 rounded-2xl border border-indigo-500/20 text-center max-w-sm shadow-2xl flex flex-col items-center">
+                <div className="w-12 h-12 bg-indigo-500/20 text-indigo-400 rounded-full flex items-center justify-center mb-4">
+                  <Lock size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Login Required</h3>
+                <p className="text-sm text-slate-400 mb-6">
+                  Sign in to generate and track your personalized dynamic study plan.
+                </p>
+                <button 
+                  onClick={() => navigate('/login')}
+                  className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg transition-colors flex items-center gap-2"
+                >
+                  Sign In Now
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className={!currentUser ? 'opacity-40 pointer-events-none filter blur-[2px]' : ''}>
+            {/* Gamified Mastery Tracker (Header) */}
+            {studyPlan.length > 0 && (() => {
+              let totalTasks = 0;
             let completedCount = 0;
             studyPlan.forEach(plan => {
               plan.tasks.forEach((task, tIdx) => {
@@ -2049,6 +2040,7 @@ export default function Dashboard({ addToast }) {
                 );
               });
             })() : <p className="text-center text-slate-400 py-6">No study roadmap scheduled.</p>}
+            </div>
           </div>
         </div>
       )}
@@ -2094,7 +2086,7 @@ export default function Dashboard({ addToast }) {
             {questions.length === 0 ? (
               <p className="text-center text-slate-400 py-10 font-semibold">No questions found matching your filter rules.</p>
             ) : (
-              questions.slice((currentPage - 1) * questionsPerPage, currentPage * questionsPerPage).map((q, idx) => (
+              questions.slice((currentPage - 1) * questionsPerPage, currentPage * questionsPerPage).map((q) => (
                 <div key={q.id}>
                   <QuestionCard 
                     q={q} 

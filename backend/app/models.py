@@ -165,6 +165,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     generated_exams = relationship("UserGeneratedExam", back_populates="user", cascade="all, delete-orphan")
+    topic_performances = relationship("UserTopicPerformance", back_populates="user", cascade="all, delete-orphan")
     feedbacks = relationship("QuestionFeedback", back_populates="user", cascade="all, delete-orphan")
     activity_logs = relationship("ActivityLog", back_populates="user", cascade="all, delete-orphan")
 
@@ -181,6 +182,26 @@ class UserGeneratedExam(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="generated_exams")
+
+
+class UserTopicPerformance(Base):
+    __tablename__ = "user_topic_performance"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    exam_id = Column(Integer, ForeignKey("exams.id"), nullable=False)
+    topic_id = Column(Integer, ForeignKey("topics.id"), nullable=False)
+    
+    questions_attempted = Column(Integer, default=0)
+    total_marks_attempted = Column(Float, default=0.0)
+    earned_marks = Column(Float, default=0.0)
+    
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="topic_performances")
+    exam = relationship("Exam")
+    topic = relationship("Topic")
+
 
 
 class ActivityLog(Base):

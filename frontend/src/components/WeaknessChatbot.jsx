@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Send, Bot, Sparkles, BookOpen, Lightbulb, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -14,11 +14,12 @@ const escapeHtml = (unsafe) => {
 };
 
 export default function WeaknessChatbot({ isOpen, onClose, question, onXpEarned }) {
-  const { currentUser } = useAuth();
+  const { currentUser, token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [followUpQuestion, setFollowUpQuestion] = useState('');
   const [chatHistory, setChatHistory] = useState([]);
+  const abortRef = useRef(null);
 
   const handleAskMentor = async (customQuestion = null) => {
     // 1) Verify user is logged in
@@ -51,21 +52,30 @@ export default function WeaknessChatbot({ isOpen, onClose, question, onXpEarned 
 
     setLoading(true);
 
+    // Cancel any previous in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    abortRef.current = new AbortController();
+
     const body = {
       question_text: customQuestion || question?.question_text || '',
       correct_answer: question?.correct_answer || null,
       user_answer: question?.user_answer || null,
-      topic_name: question?.topic_name || null
+      topic_name: question?.topic_name || null,
     };
 
     try {
       const res = await fetch(`${API_BASE}/api/mentor`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        signal: abortRef.current.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.detail || `HTTP error: ${res.status}`);
       }
       const data = await res.json();
 
@@ -83,17 +93,24 @@ export default function WeaknessChatbot({ isOpen, onClose, question, onXpEarned 
         onXpEarned(data.xp_earned);
       }
     } catch (err) {
-      console.error('Mentor API error:', err);
+      if (err.name === 'AbortError') return;
+      console.error('[WeaknessChatbot] mentor API error:', err.message);
       const errorEntry = {
         question: customQuestion || 'Explain this question step by step',
         explanation: 'Failed to reach the AI Mentor. Please check your connection and try again.',
         tips: [],
-        xp: 0
+        xp: 0,
       };
       setChatHistory(prev => [...prev, errorEntry]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Cancel inflight request when modal closes or component unmounts
+  const handleClose = () => {
+    if (abortRef.current) abortRef.current.abort();
+    onClose();
   };
 
   const handleFollowUp = () => {
@@ -123,7 +140,7 @@ export default function WeaknessChatbot({ isOpen, onClose, question, onXpEarned 
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
           >
             <X size={18} />
