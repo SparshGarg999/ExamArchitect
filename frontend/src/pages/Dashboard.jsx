@@ -203,6 +203,8 @@ export default function Dashboard({ addToast }) {
   const [selectedHeatmapTopic, setSelectedHeatmapTopic] = useState(null);
   const [heatmapSearch, setHeatmapSearch] = useState('');
   const [themeAccent, setThemeAccent] = useState('indigo');
+  // Dynamic thresholds computed from exam data (updated when heatmap data loads)
+  const [heatmapThresholds, setHeatmapThresholds] = useState({ low: 3, medium: 7 });
   const topicDetailsRef = useRef(null);
 
   // Study plan states
@@ -485,22 +487,30 @@ export default function Dashboard({ addToast }) {
     }));
   };
 
-  const renderHeatmapCell = (marks, questions, avgDifficulty, topic, year, key, tooltipBelow = false) => {
+  const renderHeatmapCell = (marks, questions, avgDifficulty, topic, year, key, tooltipBelow = false, dynamicThresholds = null) => {
     const topicName = topic?.name || 'Topic';
     let bgIntensity = 'rgba(255,255,255,0.02)';
     let textColor = '#64748b';
     let borderStyle = 'border-white/5';
 
+    // Use dynamic thresholds when provided (per-exam), fall back to GATE defaults
+    const lowMax      = dynamicThresholds?.low      ?? 3;
+    const medMax      = dynamicThresholds?.medium    ?? 7;
+    // criticalMin is implicitly marks > medMax
+
     if (marks > 0) {
-      if (marks <= 3) {
+      if (marks <= lowMax) {
+        // Low Weight — subtle indigo
         bgIntensity = `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(129, 140, 248, 0.15))`;
         textColor = '#a5b4fc';
         borderStyle = 'border-indigo-500/20';
-      } else if (marks <= 7) {
+      } else if (marks <= medMax) {
+        // Medium Weight — purple
         bgIntensity = `linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(139, 92, 246, 0.4))`;
         textColor = '#e9d5ff';
         borderStyle = 'border-purple-500/30';
       } else {
+        // Critical Weight — rose/red
         bgIntensity = `linear-gradient(135deg, rgba(244, 63, 94, 0.8), rgba(236, 72, 153, 0.85))`;
         textColor = '#ffffff';
         borderStyle = 'border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.2)]';
@@ -514,6 +524,15 @@ export default function Dashboard({ addToast }) {
         diffText = diffVal > 2.3 ? 'Hard' : diffVal > 1.6 ? 'Medium' : 'Easy';
       }
     }
+
+    // Weight label for tooltip
+    const weightLabel = marks === 0
+      ? 'No Questions'
+      : marks <= lowMax
+        ? 'Low Weight'
+        : marks <= medMax
+          ? 'Medium Weight'
+          : 'Critical Weight';
 
     let cellContent = null;
     if (heatmapViewMode === 'marks') {
@@ -541,7 +560,7 @@ export default function Dashboard({ addToast }) {
           e.stopPropagation();
           setSelectedHeatmapTopic(topic);
         }}
-        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border ${borderStyle} transition-all hover:scale-[1.05] hover:border-white/30 hover:z-[60] relative group cursor-pointer ${marks > 7 ? 'shadow-md shadow-rose-950/20 animate-pulse-slow' : ''}`}
+        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border ${borderStyle} transition-all hover:scale-[1.05] hover:border-white/30 hover:z-[60] relative group cursor-pointer ${marks > medMax ? 'shadow-md shadow-rose-950/20 animate-pulse-slow' : ''}`}
       >
         {cellContent}
         
@@ -553,10 +572,13 @@ export default function Dashboard({ addToast }) {
           <div className="text-indigo-300 font-semibold">Marks Weight: {marks.toFixed(1)} {marks === 1 ? 'mark' : 'marks'}</div>
           <div className="text-purple-300 font-semibold">Questions: {questions} {questions === 1 ? 'question' : 'questions'}</div>
           <div className="text-amber-300 font-semibold">Avg Difficulty: {diffText}</div>
+          <div className="mt-1 pt-1 border-t border-white/5 text-slate-400 font-semibold">{weightLabel}</div>
+          <div className="text-slate-500 text-[8px]">Thresholds: Low ≤{lowMax.toFixed(1)}m · Med ≤{medMax.toFixed(1)}m</div>
         </div>
       </div>
     );
   };
+
 
   const trendChartData = (selectedHeatmapTopic && heatmapData) ? {
     labels: heatmapData.years.length > 0 ? heatmapData.years : [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
@@ -884,6 +906,37 @@ export default function Dashboard({ addToast }) {
                     return acc + marksSum;
                   }, 0) || 1;
 
+                  // ── Dynamic marks thresholds (per-exam) ───────────────────────────
+                  // Collect all non-zero single-year marks across every topic row
+                  const allYearMarksValues = [];
+                  Object.values(parentTopicMap).forEach(row => {
+                    Object.values(row.years).forEach(yearStat => {
+                      if (yearStat.total_marks > 0) {
+                        allYearMarksValues.push(yearStat.total_marks);
+                      }
+                    });
+                  });
+                  allYearMarksValues.sort((a, b) => a - b);
+
+                  // Use percentile-based breakpoints so the colour spread adapts to
+                  // each exam's actual range (GATE: max ~10m, JEE: max ~40m, etc.)
+                  const pct = (arr, p) => {
+                    if (!arr.length) return 0;
+                    const idx = Math.floor((p / 100) * (arr.length - 1));
+                    return arr[Math.max(0, Math.min(idx, arr.length - 1))];
+                  };
+                  const dynamicThresholds = {
+                    // Low  = bottom 30% of non-zero values  (floor: 3m)
+                    low:    Math.max(3,  pct(allYearMarksValues, 30)),
+                    // Medium = bottom 65% of non-zero values (floor: 7m)
+                    medium: Math.max(7,  pct(allYearMarksValues, 65)),
+                    // Critical = anything above medium threshold
+                  };
+                  // Sync to state so the legend outside the IIFE can read it
+                  if (heatmapThresholds.low !== dynamicThresholds.low || heatmapThresholds.medium !== dynamicThresholds.medium) {
+                    setTimeout(() => setHeatmapThresholds(dynamicThresholds), 0);
+                  }
+
                   const renderSparkline = (rowYears, yearsArray) => {
                     const points = yearsArray.map((y, index) => {
                       const val = (rowYears[y] && typeof rowYears[y] === 'object') ? (rowYears[y].total_marks || 0) : 0;
@@ -1018,7 +1071,7 @@ export default function Dashboard({ addToast }) {
                                   </div>
                                   {years.map((y, i) => {
                                     const stat = row.years[y] || { total_marks: 0, question_count: 0, avg_difficulty: null };
-                                    return renderHeatmapCell(stat.total_marks, stat.question_count, stat.avg_difficulty, row, y, `${row.id}-${y}-${i}`, rowIndex <= 1);
+                                    return renderHeatmapCell(stat.total_marks, stat.question_count, stat.avg_difficulty, row, y, `${row.id}-${y}-${i}`, rowIndex <= 1, dynamicThresholds);
                                   })}
                                 </div>
 
@@ -1050,7 +1103,8 @@ export default function Dashboard({ addToast }) {
                                                 sub, 
                                                 y, 
                                                 `${sub.id}-${y}-${i}`,
-                                                rowIndex <= 1
+                                                rowIndex <= 1,
+                                                dynamicThresholds
                                               );
                                             })}
                                           </div>
@@ -1394,13 +1448,14 @@ export default function Dashboard({ addToast }) {
               )}
             </div>
 
-            {/* Legend */}
+            {/* Legend — values update dynamically per exam */}
             <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-400">
               <span className="font-semibold text-slate-300">Weightage Color Index:</span>
               <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-white/5 border border-white/10"></span> 0 marks</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-500/20 border border-indigo-500/30"></span> Low Weight (1-3 marks)</span>
-<span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500/50 border border-purple-500/60"></span> Medium Weight (4-7 marks)</span>
-              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-500/80 border border-rose-500"></span> Critical Weight (&gt;7 marks)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-indigo-500/20 border border-indigo-500/30"></span> Low Weight (1–{heatmapThresholds.low.toFixed(0)}m)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-purple-500/50 border border-purple-500/60"></span> Medium Weight ({(heatmapThresholds.low + 1).toFixed(0)}–{heatmapThresholds.medium.toFixed(0)}m)</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-500/80 border border-rose-500"></span> Critical Weight (&gt;{heatmapThresholds.medium.toFixed(0)}m)</span>
+              <span className="text-slate-500 italic">(auto-scaled to this exam's data)</span>
             </div>
           </div>
 
