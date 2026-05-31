@@ -1,270 +1,202 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
+import ThreeGlobe from 'three-globe';
 
-/* ── City data (lat, lon) ────────────────────────────────────────────── */
-const CITIES = [
-  { lat: 37.77,  lon: -122.42, label: 'San Francisco', color: '#f43f5e' },
-  { lat: 40.71,  lon: -74.01,  label: 'New York',      color: '#f43f5e' },
-  { lat: 51.51,  lon: -0.13,   label: 'London',        color: '#10b981' },
-  { lat: 35.68,  lon: 139.65,  label: 'Tokyo',         color: '#a855f7' },
-  { lat: 12.97,  lon: 77.59,   label: 'Bengaluru',     color: '#ec4899' },
-  { lat: -33.87, lon: 151.21,  label: 'Sydney',        color: '#06b6d4' },
-  { lat: 48.86,  lon: 2.35,    label: 'Paris',         color: '#10b981' },
-  { lat: 1.35,   lon: 103.82,  label: 'Singapore',     color: '#ec4899' },
-  { lat: 25.20,  lon: 55.27,   label: 'Dubai',         color: '#06b6d4' },
-  { lat: -23.55, lon: -46.63,  label: 'São Paulo',     color: '#f59e0b' },
-];
-
-/* ── Arc connections (indices into CITIES) ───────────────────────────── */
-const ARCS = [
-  [0, 2, '#a855f7'], [1, 4, '#818cf8'], [2, 3, '#ec4899'],
-  [4, 5, '#06b6d4'], [3, 0, '#f59e0b'], [6, 1, '#10b981'],
-  [2, 8, '#06b6d4'], [7, 4, '#ec4899'], [6, 7, '#10b981'],
-  [0, 9, '#f59e0b'], [5, 3, '#a855f7'],
-];
-
-/* ── Helpers ──────────────────────────────────────────────────────────── */
-function toRadians(deg) { return deg * Math.PI / 180; }
-
-/** Project a (lat, lon) on the rotating globe to canvas (x, y, visible) */
-function project(lat, lon, rotY, cx, cy, R) {
-  const phi   = toRadians(90 - lat);
-  const theta = toRadians(lon) + rotY;
-  // 3D coords on unit sphere
-  const x3 = Math.sin(phi) * Math.cos(theta);
-  const y3 = Math.cos(phi);
-  const z3 = Math.sin(phi) * Math.sin(theta);
-  // Orthographic projection (slight tilt: rotate x by 20°)
-  const tilt = toRadians(20);
-  const yp = y3 * Math.cos(tilt) - z3 * Math.sin(tilt);
-  const zp = y3 * Math.sin(tilt) + z3 * Math.cos(tilt);
-  return {
-    x: cx + x3 * R,
-    y: cy - yp * R,
-    z: zp,           // >0 = front hemisphere
-    visible: zp > -0.05,
-  };
-}
-
-export default function GithubGlobe({ width = 460, height = 460 }) {
-  const canvasRef = useRef(null);
-  const stateRef  = useRef({ rotY: 0.8, dragging: false, lx: 0, velY: 0, raf: null });
+export default function GithubGlobe({ width = 450, height = 450 }) {
+  const containerRef = useRef(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width  = width  * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width  = `${width}px`;
-    canvas.style.height = `${height}px`;
-    ctx.scale(dpr, dpr);
+    if (!containerRef.current) return;
+    containerRef.current.innerHTML = '';
 
-    const cx = width  / 2;
-    const cy = height / 2;
-    const R  = Math.min(width, height) * 0.40;
+    // ── Renderer (performance-tuned) ───────────────────────────────────────
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
+    // Cap pixel-ratio at 1.5 — the #1 reason WebGL globes lag on retina screens
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setSize(width, height);
+    containerRef.current.appendChild(renderer.domElement);
 
-    let t = 0;
-    let lastTs = null;
-    const s = stateRef.current;
+    // ── Scene / Camera ─────────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, width / height, 1, 1000);
+    camera.position.z = 310;
 
-    /* ── Grid line data (precomputed, static relative to sphere) ───────── */
-    const latLines = [];
+    // ── Lights ─────────────────────────────────────────────────────────────
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+    sun.position.set(150, 250, 150);
+    scene.add(sun);
+    const rim = new THREE.DirectionalLight(0x818cf8, 1.0);
+    rim.position.set(-150, -250, -150);
+    scene.add(rim);
+
+    // ── Globe ──────────────────────────────────────────────────────────────
+    const globe = new ThreeGlobe()
+      .showGlobe(true)
+      .globeMaterial(new THREE.MeshPhongMaterial({
+        color: 0x0b0d1e,
+        transparent: true,
+        opacity: 0.92,
+        shininess: 10,
+      }))
+      .showAtmosphere(true)
+      .atmosphereColor('#818cf8')
+      .atmosphereAltitude(0.15);
+
+    // ── City markers ────────────────────────────────────────────────────────
+    const markers = [
+      { lat: 37.7749,  lng: -122.4194, color: '#f43f5e' }, // SF
+      { lat: 40.7128,  lng: -74.0060,  color: '#f43f5e' }, // NY
+      { lat: 51.5074,  lng: -0.1278,   color: '#10b981' }, // London
+      { lat: 35.6762,  lng: 139.6503,  color: '#a855f7' }, // Tokyo
+      { lat: 12.9716,  lng: 77.5946,   color: '#ec4899' }, // Bengaluru
+      { lat: -33.8688, lng: 151.2093,  color: '#06b6d4' }, // Sydney
+      { lat: 48.8566,  lng: 2.3522,    color: '#10b981' }, // Paris
+      { lat: 1.3521,   lng: 103.8198,  color: '#ec4899' }, // Singapore
+      { lat: 25.2048,  lng: 55.2708,   color: '#06b6d4' }, // Dubai
+      { lat: -23.5505, lng: -46.6333,  color: '#f59e0b' }, // São Paulo
+    ];
+    globe
+      .pointsData(markers)
+      .pointColor(p => p.color)
+      .pointAltitude(0.018)
+      .pointRadius(0.7);
+
+    // ── Connection arcs (fewer = smoother) ─────────────────────────────────
+    // NOTE: No GeoJSON hex-polygons — that was the performance killer.
+    //       Custom lat/lon grid lines drawn via THREE.Line are used instead.
+    const arcs = [
+      { startLat: 37.77, startLng: -122.42, endLat: 51.51, endLng: -0.13,   color: '#a855f7', alt: 0.25 },
+      { startLat: 40.71, startLng: -74.01,  endLat: 12.97, endLng: 77.59,   color: '#818cf8', alt: 0.30 },
+      { startLat: 51.51, startLng: -0.13,   endLat: 35.68, endLng: 139.65,  color: '#ec4899', alt: 0.28 },
+      { startLat: 12.97, startLng: 77.59,   endLat: -33.87, endLng: 151.21, color: '#06b6d4', alt: 0.22 },
+      { startLat: 35.68, startLng: 139.65,  endLat: 37.77, endLng: -122.42, color: '#f59e0b', alt: 0.32 },
+      { startLat: 48.86, startLng: 2.35,    endLat: 40.71, endLng: -74.01,  color: '#10b981', alt: 0.24 },
+      { startLat: 1.35,  startLng: 103.82,  endLat: 12.97, endLng: 77.59,   color: '#ec4899', alt: 0.18 },
+      { startLat: 25.20, startLng: 55.27,   endLat: 48.86, endLng: 2.35,    color: '#06b6d4', alt: 0.26 },
+    ];
+    globe
+      .arcsData(arcs)
+      .arcColor(a => a.color)
+      .arcAltitude(a => a.alt)
+      .arcStroke(0.5)
+      .arcDashLength(0.35)
+      .arcDashGap(0.2)
+      .arcDashAnimateTime(3000); // slower = less GPU work per frame
+
+    // ── Lightweight grid lines (replaces GeoJSON hex-polygons) ─────────────
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0x6366f1, transparent: true, opacity: 0.18,
+    });
+    const equatorMat = new THREE.LineBasicMaterial({
+      color: 0x818cf8, transparent: true, opacity: 0.40,
+    });
+    const R = 100; // ThreeGlobe unit radius
+    // Latitude lines
     for (let lat = -75; lat <= 75; lat += 15) {
+      const r = Math.cos(lat * Math.PI / 180) * R;
+      const y = Math.sin(lat * Math.PI / 180) * R;
       const pts = [];
-      for (let lon = 0; lon <= 360; lon += 4) pts.push([lat, lon]);
-      latLines.push(pts);
+      for (let a = 0; a <= 360; a += 6)
+        pts.push(new THREE.Vector3(r * Math.cos(a * Math.PI / 180), y, r * Math.sin(a * Math.PI / 180)));
+      globe.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lat === 0 ? equatorMat : lineMat));
     }
-    const lonLines = [];
-    for (let lon = 0; lon < 360; lon += 15) {
+    // Longitude lines
+    for (let lon = 0; lon < 360; lon += 20) {
       const pts = [];
-      for (let lat = -90; lat <= 90; lat += 4) pts.push([lat, lon]);
-      lonLines.push(pts);
+      for (let a = 0; a <= 180; a += 6) {
+        const phi = a * Math.PI / 180;
+        const theta = lon * Math.PI / 180;
+        pts.push(new THREE.Vector3(
+          Math.sin(phi) * Math.cos(theta) * R,
+          Math.cos(phi) * R,
+          Math.sin(phi) * Math.sin(theta) * R,
+        ));
+      }
+      globe.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
     }
 
-    /* ── Draw one frame ─────────────────────────────────────────────────── */
-    function draw(ts) {
-      s.raf = requestAnimationFrame(draw);
-      const dt = lastTs ? Math.min((ts - lastTs) / 1000, 0.05) : 0.016; // cap at 50ms
-      lastTs = ts;
-      t += dt;
+    globe.rotation.x = 0.3;
+    globe.rotation.y = 0.8;
+    scene.add(globe);
+    setReady(true);
 
-      // Auto-rotate + inertia
-      if (!s.dragging) {
-        s.velY = s.velY * 0.92 + 0.28 * dt; // gentle auto-spin
-        s.rotY += s.velY;
-      }
-
-      ctx.clearRect(0, 0, width, height);
-
-      /* Globe base sphere */
-      const grad = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.3, R * 0.1, cx, cy, R);
-      grad.addColorStop(0, 'rgba(30,40,90,0.92)');
-      grad.addColorStop(1, 'rgba(8,10,28,0.88)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      /* Atmosphere glow */
-      const atm = ctx.createRadialGradient(cx, cy, R * 0.92, cx, cy, R * 1.22);
-      atm.addColorStop(0, 'rgba(129,140,248,0.12)');
-      atm.addColorStop(0.5, 'rgba(99,102,241,0.06)');
-      atm.addColorStop(1, 'rgba(99,102,241,0)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R * 1.22, 0, Math.PI * 2);
-      ctx.fillStyle = atm;
-      ctx.fill();
-
-      /* Clip to globe circle for all interior drawing */
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.clip();
-
-      /* Grid lines */
-      ctx.lineWidth = 0.6;
-      ctx.strokeStyle = 'rgba(99,102,241,0.18)';
-      for (const pts of latLines) {
-        ctx.beginPath();
-        let first = true;
-        for (const [la, lo] of pts) {
-          const p = project(la, lo, s.rotY, cx, cy, R);
-          if (!p.visible) { first = true; continue; }
-          first ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
-          first = false;
-        }
-        ctx.stroke();
-      }
-      for (const pts of lonLines) {
-        ctx.beginPath();
-        let first = true;
-        for (const [la, lo] of pts) {
-          const p = project(la, lo, s.rotY, cx, cy, R);
-          if (!p.visible) { first = true; continue; }
-          first ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y);
-          first = false;
-        }
-        ctx.stroke();
-      }
-
-      /* Arcs (animated dashes travelling along great-circle arcs) */
-      for (let i = 0; i < ARCS.length; i++) {
-        const [ai, bi, color] = ARCS[i];
-        const A = CITIES[ai], B = CITIES[bi];
-        const steps = 60;
-        const phase = (t * 0.4 + i / ARCS.length) % 1;
-        const dashLen = 0.18;
-
-        // Sample arc points
-        const arcPts = [];
-        for (let k = 0; k <= steps; k++) {
-          const frac = k / steps;
-          // Spherical interpolation (SLERP simplified via great-circle intermediate)
-          const la  = A.lat + (B.lat - A.lat) * frac;
-          const lo  = A.lon + (B.lon - A.lon) * frac;
-          const arc = 0.22 * Math.sin(frac * Math.PI); // lift off globe
-          const p   = project(la, lo, s.rotY, cx, cy, R * (1 + arc));
-          arcPts.push({ ...p, frac });
-        }
-
-        ctx.lineWidth = 1.2;
-        for (let k = 0; k < arcPts.length - 1; k++) {
-          const frac = arcPts[k].frac;
-          const dist = Math.abs(((frac - phase + 1) % 1));
-          const inDash = dist < dashLen || dist > (1 - dashLen * 0.4);
-          if (!inDash) continue;
-          if (!arcPts[k].visible || !arcPts[k + 1].visible) continue;
-          const alpha = 1 - dist / dashLen;
-          ctx.beginPath();
-          ctx.moveTo(arcPts[k].x, arcPts[k].y);
-          ctx.lineTo(arcPts[k + 1].x, arcPts[k + 1].y);
-          ctx.strokeStyle = color + Math.round(Math.max(0.1, alpha) * 255).toString(16).padStart(2, '0');
-          ctx.stroke();
-        }
-      }
-
-      /* City dots + pulsing rings */
-      for (let i = 0; i < CITIES.length; i++) {
-        const city = CITIES[i];
-        const p = project(city.lat, city.lon, s.rotY, cx, cy, R);
-        if (!p.visible) continue;
-        const pulse = (t * 1.1 + i * 0.4) % 1;
-
-        // Outer pulsing ring
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 4 + pulse * 10, 0, Math.PI * 2);
-        ctx.strokeStyle = city.color + Math.round((1 - pulse) * 100).toString(16).padStart(2, '0');
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Core dot
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = city.color;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
-      }
-
-      ctx.restore();
-
-      /* Specular highlight on top-left */
-      const spec = ctx.createRadialGradient(cx - R * 0.38, cy - R * 0.35, 0, cx - R * 0.38, cy - R * 0.35, R * 0.55);
-      spec.addColorStop(0, 'rgba(255,255,255,0.07)');
-      spec.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.fillStyle = spec;
-      ctx.fill();
-    }
-
-    s.raf = requestAnimationFrame(draw);
-
-    /* ── Drag interaction ─────────────────────────────────────────────── */
-    const el = canvas;
-    const onDown = (e) => {
-      s.dragging = true;
-      s.velY = 0;
-      s.lx = e.touches ? e.touches[0].clientX : e.clientX;
-      el.style.cursor = 'grabbing';
+    // ── Drag interaction ────────────────────────────────────────────────────
+    let isDown = false, prevX = 0, prevY = 0;
+    const el = renderer.domElement;
+    const onDown  = e => { isDown = true;  prevX = e.clientX; prevY = e.clientY; };
+    const onMove  = e => {
+      if (!isDown) return;
+      globe.rotation.y += (e.clientX - prevX) * 0.005;
+      globe.rotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3,
+        globe.rotation.x + (e.clientY - prevY) * 0.005));
+      prevX = e.clientX; prevY = e.clientY;
     };
-    const onMove = (e) => {
-      if (!s.dragging) return;
-      const x = e.touches ? e.touches[0].clientX : e.clientX;
-      const dx = x - s.lx;
-      s.rotY += dx * 0.007;
-      s.velY = dx * 0.007;
-      s.lx = x;
-    };
-    const onUp = () => {
-      s.dragging = false;
-      el.style.cursor = 'grab';
-    };
+    const onUp    = () => { isDown = false; };
+    el.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
 
-    el.addEventListener('mousedown', onDown);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    el.addEventListener('touchstart', onDown, { passive: true });
-    window.addEventListener('touchmove', onMove, { passive: true });
-    window.addEventListener('touchend', onUp);
+    // ── Animation loop ──────────────────────────────────────────────────────
+    // Use a fixed time-step to avoid over-rendering on high-refresh screens
+    let rafId, lastTime = 0;
+    const TARGET_FPS = 60;
+    const FRAME_MS   = 1000 / TARGET_FPS;
 
+    const animate = (now) => {
+      rafId = requestAnimationFrame(animate);
+      if (now - lastTime < FRAME_MS) return; // skip if too early
+      lastTime = now;
+      if (!isDown) globe.rotation.y += 0.0015;
+      renderer.render(scene, camera);
+    };
+    rafId = requestAnimationFrame(animate);
+
+    // ── Cleanup ─────────────────────────────────────────────────────────────
     return () => {
-      cancelAnimationFrame(s.raf);
-      el.removeEventListener('mousedown', onDown);
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      el.removeEventListener('touchstart', onDown);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onUp);
+      cancelAnimationFrame(rafId);
+      el.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (containerRef.current?.contains(el)) containerRef.current.removeChild(el);
+      scene.clear();
+      renderer.dispose();
     };
   }, [width, height]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ cursor: 'grab', borderRadius: '50%', display: 'block' }}
-    />
+    <div
+      className="github-globe-wrapper"
+      style={{
+        position: 'relative',
+        width: `${width}px`,
+        height: `${height}px`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'grab',
+        maxWidth: '100%',
+        willChange: 'transform', // GPU compositing hint
+      }}
+    >
+      <style>{`
+        .github-globe-wrapper canvas {
+          max-width: 100% !important;
+          height: auto !important;
+          outline: none;
+        }
+      `}</style>
+      {!ready && (
+        <div style={{ position: 'absolute', color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span className="btn-spinner" /> Loading Globe...
+        </div>
+      )}
+      <div ref={containerRef} style={{ width: `${width}px`, height: `${height}px` }} />
+    </div>
   );
 }
