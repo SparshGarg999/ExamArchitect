@@ -197,7 +197,7 @@ export default function Dashboard({ addToast }) {
 
   // Heatmap view mode ('status', 'marks', 'questions')
   const [heatmapViewMode, setHeatmapViewMode] = useState('status');
-  const [heatmapLayout, setHeatmapLayout] = useState('explorer');
+  const [heatmapLayout, setHeatmapLayout] = useState('grid');
   const [expandedSubjects, setExpandedSubjects] = useState({});
   const [subtopicHeatmaps, setSubtopicHeatmaps] = useState({});
   const [selectedHeatmapTopic, setSelectedHeatmapTopic] = useState(null);
@@ -641,13 +641,30 @@ export default function Dashboard({ addToast }) {
   if (loading) {
     return (
       <div className="container mx-auto px-4 flex justify-center items-center h-[60vh]">
-        <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+        <div 
+          style={{ borderTopColor: accentColorMap[themeAccent].primary }}
+          className="w-12 h-12 border-4 border-white/5 rounded-full animate-spin"
+        ></div>
       </div>
     );
   }
 
   return (
     <div className="container mx-auto px-4 max-w-7xl animate-fade-in pb-16 relative">
+      {/* Dynamic Style Injection for theme accents */}
+      <style>{`
+        .accent-text { color: ${accentColorMap[themeAccent].primary} !important; }
+        .accent-bg { background-color: ${accentColorMap[themeAccent].primary}1a !important; }
+        .accent-bg-medium { background-color: ${accentColorMap[themeAccent].primary}33 !important; }
+        .accent-border { border-color: ${accentColorMap[themeAccent].primary}40 !important; }
+        .accent-border-light { border-color: ${accentColorMap[themeAccent].primary}1a !important; }
+        .accent-fill { fill: ${accentColorMap[themeAccent].primary} !important; }
+        .accent-stroke { stroke: ${accentColorMap[themeAccent].primary} !important; }
+        .accent-glow { box-shadow: 0 0 12px ${accentColorMap[themeAccent].glow} !important; }
+        .accent-hover-border:hover { border-color: ${accentColorMap[themeAccent].primary}66 !important; }
+        .accent-solid-bg { background-color: ${accentColorMap[themeAccent].primary} !important; }
+        .accent-solid-bg-hover:hover { background-color: ${accentColorMap[themeAccent].primary}dd !important; }
+      `}</style>
       
       {/* Weakness Tagging Corner Toast Popup Notification */}
       {weaknessPopup.show && (
@@ -718,12 +735,12 @@ export default function Dashboard({ addToast }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-white/5 mb-8 overflow-x-auto">
+      <div className="flex border-b border-white/5 mb-8 overflow-x-auto no-scrollbar">
         {[
-          { id: 'heatmap', icon: BarChart3, label: 'High-Yield Topics (Heatmap)' },
-          { id: 'predictions', icon: TrendingUp, label: 'What to Study (AI Predictions)' },
-          { id: 'studyplan', icon: ListTodo, label: 'Daily Study Planner' },
-          { id: 'gapradar', icon: Target, label: 'Strengths & Weaknesses Tracker' },
+          { id: 'heatmap', icon: BarChart3, label: 'Topic Heatmap' },
+          { id: 'predictions', icon: TrendingUp, label: 'AI Predictions' },
+          { id: 'studyplan', icon: ListTodo, label: 'Study Planner' },
+          { id: 'gapradar', icon: Target, label: 'Weakness Tracker' },
           { id: 'questions', icon: BookOpen, label: 'Practice Questions' }
         ].map(t => {
           const isActive = activeTab === t.id;
@@ -779,8 +796,8 @@ export default function Dashboard({ addToast }) {
                 {/* Segmented Controls for Heatmap Layout Switcher */}
                 <div className="flex bg-black/40 border border-white/10 rounded-xl p-1 shrink-0">
                   {[
-                    { id: 'explorer', label: 'Interactive Explorer' },
-                    { id: 'grid', label: 'Decadal Grid' }
+                    { id: 'grid', label: 'Year-by-Year Grid' },
+                    { id: 'explorer', label: 'Detailed Topic Cards' }
                   ].map(layout => (
                     <button
                       key={layout.id}
@@ -907,14 +924,18 @@ export default function Dashboard({ addToast }) {
                   }, 0) || 1;
 
                   // ── Dynamic marks thresholds (per-exam) ───────────────────────────
-                  // Collect all non-zero single-year marks across every topic row
+                  // Collect all non-zero single-year marks across subtopics (or all topics if no subtopics exist)
                   const allYearMarksValues = [];
-                  Object.values(parentTopicMap).forEach(row => {
-                    Object.values(row.years).forEach(yearStat => {
-                      if (yearStat.total_marks > 0) {
-                        allYearMarksValues.push(yearStat.total_marks);
-                      }
-                    });
+                  const hasSubtopics = heatmapData.data.some(t => t.parent_id);
+                  heatmapData.data.forEach(t => {
+                    if (hasSubtopics ? t.parent_id : true) {
+                      Object.values(t.years || {}).forEach(yearStat => {
+                        const marks = yearStat.total_marks || 0;
+                        if (marks > 0) {
+                          allYearMarksValues.push(marks);
+                        }
+                      });
+                    }
                   });
                   allYearMarksValues.sort((a, b) => a - b);
 
@@ -925,13 +946,13 @@ export default function Dashboard({ addToast }) {
                     const idx = Math.floor((p / 100) * (arr.length - 1));
                     return arr[Math.max(0, Math.min(idx, arr.length - 1))];
                   };
+                  
+                  const lowThreshold = Math.max(3, pct(allYearMarksValues, 30));
                   const dynamicThresholds = {
-                    // Low  = bottom 30% of non-zero values  (floor: 3m)
-                    low:    Math.max(3,  pct(allYearMarksValues, 30)),
-                    // Medium = bottom 65% of non-zero values (floor: 7m)
-                    medium: Math.max(7,  pct(allYearMarksValues, 65)),
-                    // Critical = anything above medium threshold
+                    low: lowThreshold,
+                    medium: Math.max(lowThreshold + 1, Math.max(7, pct(allYearMarksValues, 65)))
                   };
+                  
                   // Sync to state so the legend outside the IIFE can read it
                   if (heatmapThresholds.low !== dynamicThresholds.low || heatmapThresholds.medium !== dynamicThresholds.medium) {
                     setTimeout(() => setHeatmapThresholds(dynamicThresholds), 0);
@@ -987,7 +1008,7 @@ export default function Dashboard({ addToast }) {
                         })()}
                         <defs>
                           <linearGradient id="sparkline-gradient-card" x1="0" y1="0" x2="1" y2="0">
-                            <stop offset="0%" stopColor="#6366f1" />
+                            <stop offset="0%" stopColor={accentColorMap[themeAccent].primary} />
                             <stop offset="100%" stopColor="#ec4899" />
                           </linearGradient>
                         </defs>
@@ -1570,8 +1591,8 @@ export default function Dashboard({ addToast }) {
                   const probPct = Math.round(pred.predicted_probability * 100);
                   const isWeakness = studyPlanWeaknesses.split(',').map(s => s.trim().toLowerCase()).includes(pred.topic_name.toLowerCase());
                   
-                  let tagColor = 'text-indigo-400 bg-indigo-500/10 border border-indigo-500/20';
-                  let gaugeColor = 'text-indigo-400';
+                  let tagColor = 'accent-text accent-bg accent-border';
+                  let gaugeColor = 'accent-text';
                   if (probPct >= 90) {
                     tagColor = 'text-rose-400 bg-rose-500/10 border border-rose-500/20';
                     gaugeColor = 'text-rose-500';
@@ -1581,10 +1602,10 @@ export default function Dashboard({ addToast }) {
                   }
 
                   return (
-                    <div key={i} className="glass-panel p-5 bg-[#121420]/60 flex flex-col justify-between border border-white/5 hover:border-indigo-500/20 transition-all hover:scale-[1.01] shadow-lg rounded-2xl relative overflow-hidden">
+                    <div key={i} className="glass-panel p-5 bg-[#121420]/60 flex flex-col justify-between border border-white/5 accent-hover-border transition-all hover:scale-[1.01] shadow-lg rounded-2xl relative overflow-hidden">
                       {/* Glow background decoration */}
                       <div className={`absolute -top-6 -right-6 w-24 h-24 rounded-full filter blur-[40px] opacity-10 ${
-                        probPct >= 90 ? 'bg-rose-500' : 'bg-indigo-500'
+                        probPct >= 90 ? 'bg-rose-500' : 'accent-solid-bg'
                       }`}></div>
 
                       <div>
@@ -2023,9 +2044,9 @@ export default function Dashboard({ addToast }) {
                   nodeCircleStyle = 'border-emerald-500 bg-emerald-950 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]';
                   nodeIcon = <Check size={14} className="stroke-[3]" />;
                 } else if (isActiveQuest) {
-                  cardBorder = 'border-indigo-500/30 bg-indigo-500/5 shadow-lg shadow-indigo-950/20';
-                  nodeCircleStyle = 'border-indigo-500 bg-indigo-950 text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.3)]';
-                  nodeIcon = <Play size={10} className="fill-indigo-400 stroke-none ml-0.5" />;
+                  cardBorder = 'accent-border accent-bg accent-glow';
+                  nodeCircleStyle = 'accent-border bg-slate-950 accent-text accent-glow';
+                  nodeIcon = <Play size={10} className="accent-fill stroke-none ml-0.5" />;
                 } else {
                   cardBorder = 'border-white/5 bg-[#191c2c]/10 opacity-75';
                   nodeCircleStyle = 'border-slate-700 bg-slate-900 text-slate-500';
@@ -2045,7 +2066,7 @@ export default function Dashboard({ addToast }) {
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-3 border-b border-white/5">
                         <div>
                           <div className="flex items-center gap-3">
-                            <span className="text-xs font-black px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-md uppercase tracking-wider">
+                            <span className="text-xs font-black px-2 py-0.5 accent-bg-medium accent-text rounded-md uppercase tracking-wider">
                               Day {plan.day}
                             </span>
                             <span className="text-xs text-slate-400 font-semibold bg-white/5 py-0.5 px-2 rounded-md">
@@ -2057,7 +2078,7 @@ export default function Dashboard({ addToast }) {
                               </span>
                             )}
                             {isActiveQuest && (
-                              <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
+                              <span className="text-[10px] accent-text accent-bg px-2 py-0.5 rounded-full font-bold uppercase tracking-wider animate-pulse">
                                 Active Focus
                               </span>
                             )}
@@ -2071,7 +2092,7 @@ export default function Dashboard({ addToast }) {
                           <div className="w-32 bg-white/5 rounded-full h-2 border border-white/5 relative overflow-hidden">
                             <div 
                               style={{ width: `${phasePercent}%` }} 
-                              className={`h-full transition-all duration-300 ${phaseCompleted ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                              className={`h-full transition-all duration-300 ${phaseCompleted ? 'bg-emerald-500' : 'accent-solid-bg'}`}
                             ></div>
                           </div>
                           <span className="text-xs font-black text-slate-300 w-8 text-right">{phasePercent}%</span>
@@ -2106,7 +2127,8 @@ export default function Dashboard({ addToast }) {
                                 type="checkbox" 
                                 checked={checked}
                                 readOnly
-                                className="mt-0.5 shrink-0 rounded border-white/10 text-indigo-600 focus:ring-indigo-500" 
+                                style={{ accentColor: accentColorMap[themeAccent].primary }}
+                                className="mt-0.5 shrink-0 rounded border-white/10"
                               />
                               <span className="text-xs font-semibold leading-relaxed">{task}</span>
                             </li>
@@ -2133,11 +2155,11 @@ export default function Dashboard({ addToast }) {
         <div className="glass-panel p-6 bg-[#121420]/60 animate-fade-in border border-white/5">
           <div className="flex flex-wrap justify-between items-center mb-6 gap-4 border-b border-white/5 pb-6">
             <h3 className="text-xl font-bold">Historical Question Explorer</h3>
-            <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 rounded-full text-xs font-semibold">{questions.length} Questions</span>
+            <span className="px-3 py-1 accent-bg-medium accent-text rounded-full text-xs font-semibold">{questions.length} Questions</span>
           </div>
 
           <div className="flex flex-wrap gap-4 mb-8">
-            <div className="flex-grow bg-black/40 border border-white/10 rounded-xl flex items-center px-3 focus-within:border-indigo-500/50 transition-colors">
+            <div className="flex-grow bg-black/40 border border-white/10 rounded-xl flex items-center px-3 focus-within:accent-border transition-colors">
               <Search size={18} className="text-slate-400" />
               <input 
                 type="text" 
@@ -2148,7 +2170,7 @@ export default function Dashboard({ addToast }) {
               />
             </div>
             <select 
-              className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:border-indigo-500 text-sm font-semibold transition-colors" 
+              className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:accent-border text-sm font-semibold transition-colors" 
               value={selectedPaper?.id || ''} 
               onChange={e => {
                 const val = e.target.value;
@@ -2282,7 +2304,7 @@ export default function Dashboard({ addToast }) {
                       type="text" 
                       value={certName}
                       onChange={e => setCertName(e.target.value)}
-                      className="text-2xl md:text-3xl font-black text-white text-center bg-transparent border-b border-indigo-500/30 focus:border-indigo-500 outline-none w-full pb-2 font-display"
+                      className="text-2xl md:text-3xl font-black text-white text-center bg-transparent border-b accent-border focus:accent-border outline-none w-full pb-2 font-display"
                       placeholder="Enter Your Name"
                     />
                     <span className="text-[10px] text-slate-500 mt-1 block">Click to edit name on certificate</span>
@@ -2315,7 +2337,7 @@ export default function Dashboard({ addToast }) {
                 <div className="flex gap-4 mt-10 print-certificate-btn-container">
                   <button 
                     onClick={() => window.print()}
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-3 px-6 rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+                    className="accent-solid-bg accent-solid-bg-hover text-white font-bold text-xs py-3 px-6 rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-lg accent-glow"
                   >
                     <Printer size={14} /> Print Certificate
                   </button>

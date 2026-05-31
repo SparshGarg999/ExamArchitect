@@ -215,7 +215,25 @@ cp .env.example .env
 # Edit .env and add your API keys (Gemini is the primary one needed)
 ```
 
-### 2. Frontend Setup
+### 2. Supabase Integration (Optional but Recommended for Production)
+
+By default, ExamArchitect runs on a local, zero-config SQLite database (`backend/exam_architect.db`). To scale the application, you can connect it directly to a remote Supabase PostgreSQL instance:
+
+1. **Get Supabase DB Connection URI**:
+   - Create a project on [Supabase](https://supabase.com).
+   - Go to **Project Settings** -> **Database** and copy the **URI** connection string.
+2. **Configure Environment Variables**:
+   - In `backend/.env`, set the `DATABASE_URL` to your copied connection string.
+3. **Apply Row-Level Security (RLS) Policies**:
+   - ExamArchitect enforces secure access via 27 database RLS policies. Apply them using the migration utility:
+     ```bash
+     python apply_rls.py
+     ```
+   - This automatically parses and applies `rls_migration.sql` to configure SELECT restrictions on public content and secure read/write policies on user data tables.
+4. **Isolated Test Suites**:
+   - Running tests locally (via `pytest`) automatically bypasses your production database and uses an in-memory SQLite sandbox. This prevents tests from truncating or corrupting your remote Supabase tables.
+
+### 3. Frontend Setup
 
 ```bash
 # From the project root
@@ -225,10 +243,10 @@ cd frontend
 npm install
 ```
 
-### 3. Seed the Database
+### 4. Seed the Database & Run
 
 ```bash
-# Start the backend server (this auto-creates the DB schema and seeds topics)
+# Start the backend server (this auto-creates the DB schema and seeds categories/topics)
 cd backend
 python run.py
 # Server starts at http://localhost:8000
@@ -428,6 +446,32 @@ Delete `backend/exam_architect.db` and restart the backend server. The schema wi
 
 ---
 
+## 🌐 Hosting & Deployment Guide
+
+This project consists of a FastAPI backend and a Vite+React frontend. They can be hosted independently on modern cloud platforms.
+
+### 1. Backend Deployment (FastAPI + Supabase)
+
+You can host the Python backend on services like **Render**, **Railway**, or **Fly.io**:
+
+- **Build Command**: `pip install -r requirements.txt`
+- **Start Command**: `python run.py` (which binds Uvicorn to port `8000` or the `$PORT` environment variable)
+- **Environment Variables**:
+  - `DATABASE_URL`: Set to your production Supabase PostgreSQL connection URI.
+  - `GEMINI_API_KEY`: Set to your Google Gemini API key.
+  - `TESTING`: Ensure this is **NOT** set (or set to `""`) so the server seeds the production database on first startup.
+- **Health Check Endpoint**: `/health` (used for checking uptime and deployment completion).
+
+### 2. Frontend Deployment (Vite + React)
+
+The frontend build generates static HTML/JS/CSS assets that can be hosted for free on **Vercel**, **Netlify**, or **GitHub Pages**:
+
+- **Build Command**: `npm run build`
+- **Output/Publish Directory**: `dist`
+- **API Base URL Config**: If your backend is deployed to `https://exam-architect-api.onrender.com`, ensure the API request URLs in the React frontend point to that domain instead of `http://localhost:8000`.
+
+---
+
 ## 🗺 Roadmap
 
 ### ✅ Completed (Phase 1)
@@ -440,22 +484,27 @@ Delete `backend/exam_architect.db` and restart the backend server. The schema wi
 - [x] Toast notification system
 - [x] PWA manifest and service worker
 
-### 🔧 In Progress (Phase 2)
-- [ ] Heatmap aesthetic improvements (critical-red gradients, axis labels)
-- [ ] MCQ options rendering in question cards
-- [ ] Curated weakness chip selectors for study plan
-- [ ] Study plan flexible day duration fix
+### ✅ Completed (Phase 2 UX & Security Enhancements)
+- [x] **Subtopic Marks Scaling**: Recalculated heatmaps using leaf-level subtopic weightage percentiles instead of parent categories to resolve the JEE/GATE "all-red" dashboard color contrast bug.
+- [x] **Supabase Integration & RLS**: Fully migrated the backend database layer to support remote Supabase PostgreSQL with 27 fine-grained Row Level Security (RLS) security policies.
+- [x] **Test Suite Isolation**: Prevented unit tests from truncating remote Supabase database tables by isolating `pytest` execution environments with a local in-memory SQLite setup.
+- [x] **Dynamic Theme Accent Propagation**: Refactored the UI dashboard elements to dynamically apply selected theme colors to sparklines, loading indicators, planner nodes, and modal popups.
+- [x] **Cleanups**: Purged legacy Jules credentials and simplified the `.env.example` configurations.
 
 ### 🔮 Future (Phase 3+)
-- [ ] User accounts & saved study plans
-- [ ] Holdout validation backtesting visualizer
+- [ ] User accounts & saved study plans (Supabase Auth integration)
 - [ ] Difficulty trajectory charts (is a topic getting harder?)
 - [ ] Question style DNA (MCQ vs NAT ratio trends)
-- [ ] Topic pairing correlation maps
-- [ ] Cross-exam intelligence (GATE vs JEE comparison)
-- [ ] Confidence calibrator (model accuracy transparency)
-- [ ] Full mock exam simulator
+- [ ] Full mock exam simulator with timer and instant result parsing
+- [ ] Holdout validation backtesting visualizer (evaluate predictions against past actual papers)
 - [ ] More exams: NEET, UPSC, JEE, Banking
+
+### 🚀 Advanced Roadmap (Phase 4+)
+- [ ] **Automated PDF Parsing Visualizer**: An interactive drag-and-drop parser interface in the admin panel showing real-time bounding boxes of detected questions during PDF OCR extraction.
+- [ ] **JWT Auth Scope Access Control**: Integrating Supabase Auth metadata to allow multi-tenant organizations (coaching institutes, test centers) to upload proprietary papers with custom access scopes.
+- [ ] **Performance Calibration Engines**: Dynamic difficulty adjustment (DDA) engines that adapt mock simulator questions in real-time to match student strengths and weaknesses.
+- [ ] **Collaborative Learning Hub**: Group-based study planners where students studying for the same exam can share custom-curated question sets and notes.
+- [ ] **Deep Predictive Correlation Map**: Force-directed graphs showcasing latent topic pairings (e.g. if Topic A is highly tested in year X, Topic B is 78% likely to be tested in year X+1).
 
 ---
 
@@ -486,6 +535,6 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 ---
 
 <div align="center">
-<sub>Built with ❤️ for exam aspirants everywhere</sub>
+Built with ❤️ for exam aspirants everywhere
 </div>
 

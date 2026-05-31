@@ -401,4 +401,13 @@ button {
   scrollbar-color: rgba(99, 102, 241, 0.35) rgba(10, 11, 18, 0.45);
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 

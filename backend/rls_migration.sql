@@ -110,7 +110,7 @@ CREATE POLICY "Users manage own feedback"
 
 -- ─── 4. ADMIN-ONLY tables ───────────────────────────────────
 -- activity_logs should never be readable via PostgREST at all.
--- service_role (backend) bypasses RLS; no anon/authenticated policies = denied.
+-- service_role (backend) bypasses RLS - no anon or authenticated policies = all PostgREST denied
 
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 -- No policies added = all PostgREST access denied.
