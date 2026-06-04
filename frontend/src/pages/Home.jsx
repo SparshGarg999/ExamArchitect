@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ArrowRight, BarChart3, TrendingUp, BrainCircuit, Target,
@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { API_BASE } from '../config';
 import Ribbons from '../components/Ribbons';
-import GithubGlobe from '../components/GithubGlobe';
+
+const GithubGlobe = lazy(() => import('../components/GithubGlobe'));
 
 /* ─── Animated counter hook ───────────────────────────────────── */
 function useCountUp(target, duration = 1800, startTrigger = false) {
@@ -291,7 +292,14 @@ export default function Home() {
             {/* Globe + floating stats */}
             <div className="flex justify-center mb-6">
               <div className="relative flex items-center justify-center -my-10 max-w-[280px] sm:max-w-[340px] md:max-w-none mx-auto">
-                <GithubGlobe width={540} height={540} />
+                <Suspense fallback={
+                  <div className="w-[300px] h-[300px] flex items-center justify-center relative">
+                    <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+                    <span className="absolute text-slate-400 text-xs font-bold mt-24">Initializing 3D Space...</span>
+                  </div>
+                }>
+                  <GithubGlobe width={540} height={540} />
+                </Suspense>
                 {/* Floating stat pills around the globe */}
                 <div className="hidden md:block absolute -left-12 top-1/4 glass-panel px-4 py-3 text-left animate-float-slow z-10">
                   <p className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">High Predictive</p>

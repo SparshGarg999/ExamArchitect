@@ -77,11 +77,12 @@ const DURATION_PROFILES = {
 };
 
 const accentColorMap = {
-  indigo: { primary: '#6366f1', rgb: '99, 102, 241', lightText: '#a5b4fc', mediumText: '#e0e7ff', glow: 'rgba(99, 102, 241, 0.25)', border: 'rgba(99, 102, 241, 0.6)', bg: 'rgba(99, 102, 241, 0.15)', text: 'text-indigo-400' },
-  emerald: { primary: '#10b981', rgb: '16, 185, 129', lightText: '#6ee7b7', mediumText: '#d1fae5', glow: 'rgba(16, 185, 129, 0.25)', border: 'rgba(16, 185, 129, 0.6)', bg: 'rgba(16, 185, 129, 0.15)', text: 'text-emerald-400' },
-  amber: { primary: '#f59e0b', rgb: '245, 158, 11', lightText: '#fcd34d', mediumText: '#fef3c7', glow: 'rgba(245, 158, 11, 0.25)', border: 'rgba(245, 158, 11, 0.6)', bg: 'rgba(245, 158, 11, 0.15)', text: 'text-amber-400' },
-  rose: { primary: '#f43f5e', rgb: '244, 63, 94', lightText: '#fda4af', mediumText: '#ffe4e6', glow: 'rgba(244, 63, 94, 0.25)', border: 'rgba(244, 63, 94, 0.6)', bg: 'rgba(244, 63, 94, 0.15)', text: 'text-rose-400' },
+  indigo: { primary: '#6366f1', secondary: '#a855f7', rgb: '99, 102, 241', rgbSecondary: '168, 85, 247', lightText: '#a5b4fc', mediumText: '#e0e7ff', glow: 'rgba(99, 102, 241, 0.25)', border: 'rgba(99, 102, 241, 0.6)', bg: 'rgba(99, 102, 241, 0.15)', text: 'text-indigo-400' },
+  emerald: { primary: '#10b981', secondary: '#06b6d4', rgb: '16, 185, 129', rgbSecondary: '6, 182, 212', lightText: '#6ee7b7', mediumText: '#d1fae5', glow: 'rgba(16, 185, 129, 0.25)', border: 'rgba(16, 185, 129, 0.6)', bg: 'rgba(16, 185, 129, 0.15)', text: 'text-emerald-400' },
+  amber: { primary: '#f59e0b', secondary: '#f97316', rgb: '245, 158, 11', rgbSecondary: '249, 115, 22', lightText: '#fcd34d', mediumText: '#fef3c7', glow: 'rgba(245, 158, 11, 0.25)', border: 'rgba(245, 158, 11, 0.6)', bg: 'rgba(245, 158, 11, 0.15)', text: 'text-amber-400' },
+  rose: { primary: '#f43f5e', secondary: '#d946ef', rgb: '244, 63, 94', rgbSecondary: '217, 70, 239', lightText: '#fda4af', mediumText: '#ffe4e6', glow: 'rgba(244, 63, 94, 0.25)', border: 'rgba(244, 63, 94, 0.6)', bg: 'rgba(244, 63, 94, 0.15)', text: 'text-rose-400' },
 };
+
 
 function QuestionFeedback({ questionId }) {
   const [open, setOpen] = useState(false);
@@ -203,9 +204,20 @@ export default function Dashboard({ addToast }) {
   const [selectedHeatmapTopic, setSelectedHeatmapTopic] = useState(null);
   const [heatmapSearch, setHeatmapSearch] = useState('');
   const [themeAccent, setThemeAccent] = useState('indigo');
-  // Dynamic thresholds computed from exam data (updated when heatmap data loads)
   const [heatmapThresholds, setHeatmapThresholds] = useState({ low: 3, medium: 7 });
   const topicDetailsRef = useRef(null);
+  const [paperDropdownOpen, setPaperDropdownOpen] = useState(false);
+  const paperDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (paperDropdownRef.current && !paperDropdownRef.current.contains(event.target)) {
+        setPaperDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Study plan states
   const [studyPlanDays, setStudyPlanDays] = useState('30');
@@ -503,18 +515,18 @@ export default function Dashboard({ addToast }) {
 
     if (marks > 0) {
       if (marks <= lowMax) {
-        // Low Weight — subtle theme accent
-        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.12), rgba(${theme.rgb}, 0.22))`;
+        // Low Weight — subtle theme accent gradient mix
+        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.12), rgba(${theme.rgbSecondary || theme.rgb}, 0.22))`;
         textColor = theme.lightText;
         borderColorVal = `rgba(${theme.rgb}, 0.25)`;
       } else if (marks <= medMax) {
-        // Medium Weight — medium theme accent
-        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.45), rgba(${theme.rgb}, 0.55))`;
+        // Medium Weight — medium theme accent gradient mix
+        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.45), rgba(${theme.rgbSecondary || theme.rgb}, 0.55))`;
         textColor = theme.mediumText;
         borderColorVal = `rgba(${theme.rgb}, 0.5)`;
       } else {
-        // Critical Weight — strong theme accent
-        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.85), rgba(${theme.rgb}, 0.95))`;
+        // Critical Weight — strong theme accent gradient mix
+        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.85), rgba(${theme.rgbSecondary || theme.rgb}, 0.95))`;
         textColor = '#ffffff';
         borderColorVal = `rgba(${theme.rgb}, 0.9)`;
         cellShadow = `0 0 12px rgba(${theme.rgb}, 0.45)`;
@@ -658,16 +670,39 @@ export default function Dashboard({ addToast }) {
       {/* Dynamic Style Injection for theme accents */}
       <style>{`
         .accent-text { color: ${accentColorMap[themeAccent].primary} !important; }
-        .accent-bg { background-color: ${accentColorMap[themeAccent].primary}1a !important; }
-        .accent-bg-medium { background-color: ${accentColorMap[themeAccent].primary}33 !important; }
+        .accent-text-gradient {
+          background: linear-gradient(135deg, ${accentColorMap[themeAccent].primary} 0%, ${accentColorMap[themeAccent].secondary} 100%) !important;
+          -webkit-background-clip: text !important;
+          -webkit-text-fill-color: transparent !important;
+        }
+        .accent-bg { background: linear-gradient(135deg, rgba(${accentColorMap[themeAccent].rgb}, 0.1) 0%, rgba(${accentColorMap[themeAccent].rgbSecondary}, 0.1) 100%) !important; }
+        .accent-bg-medium { background: linear-gradient(135deg, rgba(${accentColorMap[themeAccent].rgb}, 0.2) 0%, rgba(${accentColorMap[themeAccent].rgbSecondary}, 0.2) 100%) !important; }
         .accent-border { border-color: ${accentColorMap[themeAccent].primary}40 !important; }
         .accent-border-light { border-color: ${accentColorMap[themeAccent].primary}1a !important; }
         .accent-fill { fill: ${accentColorMap[themeAccent].primary} !important; }
         .accent-stroke { stroke: ${accentColorMap[themeAccent].primary} !important; }
         .accent-glow { box-shadow: 0 0 12px ${accentColorMap[themeAccent].glow} !important; }
         .accent-hover-border:hover { border-color: ${accentColorMap[themeAccent].primary}66 !important; }
-        .accent-solid-bg { background-color: ${accentColorMap[themeAccent].primary} !important; }
-        .accent-solid-bg-hover:hover { background-color: ${accentColorMap[themeAccent].primary}dd !important; }
+        .accent-solid-bg { background: linear-gradient(135deg, ${accentColorMap[themeAccent].primary} 0%, ${accentColorMap[themeAccent].secondary} 100%) !important; }
+        .accent-solid-bg-hover:hover { background: linear-gradient(135deg, ${accentColorMap[themeAccent].primary}dd 0%, ${accentColorMap[themeAccent].secondary}dd 100%) !important; }
+        
+        /* Dynamic scrollbar styles for selected theme accent */
+        .scrollbar-thin::-webkit-scrollbar {
+          width: 5px !important;
+          height: 5px !important;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: rgba(10, 11, 18, 0.45) !important;
+          border-radius: 8px !important;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background: rgba(${accentColorMap[themeAccent].rgb}, 0.35) !important;
+          border-radius: 8px !important;
+          border: 1px solid rgba(255, 255, 255, 0.02) !important;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+          background: rgba(${accentColorMap[themeAccent].rgb}, 0.55) !important;
+        }
       `}</style>
       
       {/* Weakness Tagging Corner Toast Popup Notification */}
@@ -707,10 +742,10 @@ export default function Dashboard({ addToast }) {
             <div className="absolute -inset-1 opacity-5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 blur-[8px] animate-pulse"></div>
             <span className="text-[9px] uppercase font-black text-slate-400 px-1 relative z-10 tracking-wider">Accent</span>
             {[
-              { id: 'indigo', color: 'bg-indigo-500', glow: 'shadow-[0_0_10px_#6366f1]' },
-              { id: 'emerald', color: 'bg-emerald-500', glow: 'shadow-[0_0_10px_#10b981]' },
-              { id: 'amber', color: 'bg-amber-500', glow: 'shadow-[0_0_10px_#f59e0b]' },
-              { id: 'rose', color: 'bg-rose-500', glow: 'shadow-[0_0_10px_#f43f5e]' }
+              { id: 'indigo', color: 'bg-gradient-to-br from-indigo-500 to-purple-500', glow: 'shadow-[0_0_10px_#6366f1]' },
+              { id: 'emerald', color: 'bg-gradient-to-br from-emerald-500 to-cyan-500', glow: 'shadow-[0_0_10px_#10b981]' },
+              { id: 'amber', color: 'bg-gradient-to-br from-amber-500 to-orange-500', glow: 'shadow-[0_0_10px_#f59e0b]' },
+              { id: 'rose', color: 'bg-gradient-to-br from-rose-500 to-fuchsia-500', glow: 'shadow-[0_0_10px_#f43f5e]' }
             ].map(theme => (
               <button
                 key={theme.id}
@@ -2176,20 +2211,48 @@ export default function Dashboard({ addToast }) {
                 className="bg-transparent border-none text-white w-full py-2.5 px-3 focus:outline-none text-sm font-medium" 
               />
             </div>
-            <select 
-              className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:accent-border text-sm font-semibold transition-colors" 
-              value={selectedPaper?.id || ''} 
-              onChange={e => {
-                const val = e.target.value;
-                setSelectedPaper(val ? papers.find(p => p.id === parseInt(val)) : null);
-              }}
-            >
-              <option value="">All Papers</option>
-              {papers.map(p => {
-                const examLabel = selectedExam ? selectedExam.name.replace('-', ' ') : 'GATE CS';
-                return <option key={p.id} value={p.id}>{examLabel} {p.year}</option>;
-              })}
-            </select>
+            {/* Custom Dropdown for Papers Select */}
+            <div className="relative" ref={paperDropdownRef}>
+              <button 
+                type="button"
+                onClick={() => setPaperDropdownOpen(!paperDropdownOpen)}
+                className="bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white outline-none focus:accent-border hover:border-white/20 text-sm font-semibold transition-colors flex items-center gap-2 cursor-pointer min-w-[160px] justify-between h-[42px]"
+              >
+                <span>{selectedPaper ? `${selectedExam ? selectedExam.name.replace('-', ' ') : 'GATE CS'} ${selectedPaper.year}` : 'All Papers'}</span>
+                <ChevronRight size={16} className={`transition-transform duration-200 ${paperDropdownOpen ? 'rotate-90' : ''}`} />
+              </button>
+              {paperDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-[#121420]/95 backdrop-blur-md border border-white/10 shadow-2xl rounded-xl max-h-60 overflow-y-auto z-50 py-1 scrollbar-thin">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPaper(null);
+                      setPaperDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2.5 text-xs transition-colors hover:bg-white/5 cursor-pointer font-semibold ${!selectedPaper ? 'accent-text bg-white/5' : 'text-slate-300'}`}
+                  >
+                    All Papers
+                  </button>
+                  {papers.map(p => {
+                    const examLabel = selectedExam ? selectedExam.name.replace('-', ' ') : 'GATE CS';
+                    const isSelected = selectedPaper?.id === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPaper(p);
+                          setPaperDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-4 py-2.5 text-xs transition-colors hover:bg-white/5 cursor-pointer font-semibold ${isSelected ? 'accent-text bg-white/5' : 'text-slate-300'}`}
+                      >
+                        {examLabel} {p.year}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="space-y-6">

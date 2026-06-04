@@ -62,7 +62,8 @@ logs/
 *.log
 
 # ===================== Intermediate Data =====================
-backend/data/
+backend/data/staged/
+backend/data/temp_pages/
 frontend/dist/
 
 # ===================== Misc =====================
@@ -75,3 +76,8 @@ check_*.py
 test_parse.py
 questions_*_dump.txt
 parsed_*_questions.txt
+
+# Local design files & plans
+EXAM_ARCHITECT_GUIDE.md
+implementation_plan.md
+

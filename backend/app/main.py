@@ -26,8 +26,8 @@ from .rate_limiter import auth_rate_limit, exam_rate_limit, admin_rate_limit
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Make sure DB schema is created and seeded (unless testing)
-    if not os.getenv("TESTING"):
+    # Startup: Make sure DB schema is created and seeded only if explicitly requested
+    if os.getenv("SEED_DB") == "true":
         seed_database()
     yield
     # Shutdown: nothing to clean up
