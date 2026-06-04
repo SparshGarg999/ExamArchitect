@@ -23,7 +23,8 @@ if is_sqlite:
     )
 elif is_pooler:
     # Disable prepared statements for PgBouncer / Supabase Pooler Transaction Mode
-    if "prepare_threshold" not in SQLALCHEMY_DATABASE_URL:
+    # only apply if using psycopg3 (postgresql+psycopg://), as psycopg2 doesn't support this parameter
+    if "postgresql+psycopg" in SQLALCHEMY_DATABASE_URL and "prepare_threshold" not in SQLALCHEMY_DATABASE_URL:
         separator = "&" if "?" in SQLALCHEMY_DATABASE_URL else "?"
         SQLALCHEMY_DATABASE_URL += f"{separator}prepare_threshold=0"
     
