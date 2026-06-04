@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.0",
+    "@vercel/analytics": "^2.0.1",
     "chart.js": "^4.5.1",
     "lucide-react": "^1.16.0",
     "ogl": "^1.0.11",
