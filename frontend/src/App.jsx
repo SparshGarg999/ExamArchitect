@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import Navbar from './components/Shared/Navbar';
 import LandingNavbar from './components/Shared/LandingNavbar';
 import ToastContainer from './components/Shared/ToastContainer';
@@ -56,6 +57,7 @@ export default function App() {
           <a href="/privacy" className="hover:text-indigo-400 transition-colors">Privacy Policy</a>
         </div>
       </footer>
+      <Analytics />
     </div>
   );
 }
