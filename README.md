@@ -448,83 +448,71 @@ Delete `backend/exam_architect.db` and restart the backend server. The schema wi
 
 ## 🌐 Hosting & Deployment Guide
 
-This project consists of a FastAPI backend and a Vite+React frontend. They can be hosted independently on modern cloud platforms.
+This project consists of a FastAPI backend and a Vite + React frontend. They are hosted independently on modern cloud platforms.
+
+### 📁 Root Configuration Files
+* **`render.yaml` (Infrastructure as Code):** Having `render.yaml` in the root is standard practice for Render deployments. It is a Blueprint specification file that Render reads to automatically spin up your backend web service, Postgres database, and static sites.
+* **`vercel.json`:** Defines custom routing rules and Single Page Application (SPA) rewrite rules to route all traffic to `index.html` on Vercel.
 
 ### 1. Backend Deployment (FastAPI + Supabase)
-
 You can host the Python backend on services like **Render**, **Railway**, or **Fly.io**:
-
-- **Build Command**: `pip install -r requirements.txt`
-- **Start Command**: `python run.py` (which binds Uvicorn to port `8000` or the `$PORT` environment variable)
-- **Environment Variables**:
-  - `DATABASE_URL`: Set to your production Supabase PostgreSQL connection URI.
-  - `GEMINI_API_KEY`: Set to your Google Gemini API key.
-  - `TESTING`: Ensure this is **NOT** set (or set to `""`) so the server seeds the production database on first startup.
-- **Health Check Endpoint**: `/health` (used for checking uptime and deployment completion).
+- **Build Command:** `pip install -r requirements.txt`
+- **Start Command:** `python run.py` (binds Uvicorn to port `8000` or the `$PORT` environment variable)
+- **Environment Variables:**
+  - `DATABASE_URL`: Your production PostgreSQL/Supabase connection URI.
+  - `GEMINI_API_KEY`: Your Google Gemini API key.
+  - `TESTING`: Set to `""` or unset in production to ensure the DB seeds properly.
+- **Health Check Endpoint:** `/health` (used for Render deployment checks and uptime monitoring).
 
 ### 2. Frontend Deployment (Vite + React)
-
-The frontend build generates static HTML/JS/CSS assets that can be hosted for free on **Vercel**, **Netlify**, or **GitHub Pages**:
-
-- **Build Command**: `npm run build`
-- **Output/Publish Directory**: `dist`
-- **API Base URL Config**: If your backend is deployed to `https://exam-architect-api.onrender.com`, ensure the API request URLs in the React frontend point to that domain instead of `http://localhost:8000`.
+The frontend build generates static HTML/JS/CSS assets that can be hosted on **Vercel** or **Netlify**:
+- **Build Command:** `npm run build`
+- **Output/Publish Directory:** `dist`
+- **API Base URL Config:** Set the `VITE_API_BASE` environment variable to your deployed backend URL.
 
 ---
 
-## 🗺 Roadmap
+## 🗺 Roadmap & Project Phases
 
-### ✅ Completed (Phase 1)
-- [x] Full-stack scaffolding (React + FastAPI + SQLite)
-- [x] Database schema with 8 tables and relationships
-- [x] PDF ingestion pipeline with text normalization
-- [x] Interactive heatmap with subject → subtopic accordion
-- [x] Question browser with search, filters, and answer spoilers
-- [x] Admin panel wired to real API endpoints
-- [x] Toast notification system
-- [x] PWA manifest and service worker
+### ✅ Completed (Phase 1 — Core Architecture)
+- [x] Full-stack Vite + React 19 and FastAPI + SQLite skeleton.
+- [x] Pre-seeded exam categories and full GATE CS topics taxonomy.
+- [x] Core database schema (8 tables) with fully mapped ORM relationships.
+- [x] Ingestion pipeline with visual OCR question splitting, text normalization, and diagram slicing.
+- [x] Interactive subject → subtopic accordion heatmap with Chart.js trend charts.
 
-### ✅ Completed (Phase 2 UX & Security Enhancements)
-- [x] **Subtopic Marks Scaling**: Recalculated heatmaps using leaf-level subtopic weightage percentiles instead of parent categories to resolve the JEE/GATE "all-red" dashboard color contrast bug.
-- [x] **Supabase Integration & RLS**: Fully migrated the backend database layer to support remote Supabase PostgreSQL with 27 fine-grained Row Level Security (RLS) security policies.
-- [x] **Test Suite Isolation**: Prevented unit tests from truncating remote Supabase database tables by isolating `pytest` execution environments with a local in-memory SQLite setup.
-- [x] **Dynamic Theme Accent Propagation**: Refactored the UI dashboard elements to dynamically apply selected theme colors to sparklines, loading indicators, planner nodes, and modal popups.
-- [x] **Cleanups**: Purged legacy Jules credentials and simplified the `.env.example` configurations.
+### ✅ Completed (Phase 2 — UI/UX & Dynamic Styling)
+- [x] **Dynamic Theme Accent Propagation:** Selecting a theme color (indigo, emerald, amber, rose) dynamically customizes year-by-year cells, sparklines, loading states, planner routes, and modals.
+- [x] **Premium Bento Grid Alignment:** Redesigned bento layouts to fit in a balanced grid with unified card heights.
+- [x] **Three.js Globe Visualizer:** Floating latitude/longitude lines to radius `100.8` to fix bottom hemisphere clipping.
+- [x] **Private Network Access (PNA) Isolation:** Removed hardcoded localhost URLs in Question Card images to prevent Chrome local network warnings.
 
-### 🔮 Future (Phase 3+)
-- [ ] User accounts & saved study plans (Supabase Auth integration)
-- [ ] Difficulty trajectory charts (is a topic getting harder?)
-- [ ] Question style DNA (MCQ vs NAT ratio trends)
-- [ ] Full mock exam simulator with timer and instant result parsing
-- [ ] Holdout validation backtesting visualizer (evaluate predictions against past actual papers)
-- [ ] More exams: NEET, UPSC, JEE, Banking
+### ✅ Completed (Phase 3 — Database Port & Security)
+- [x] **Supabase PostgreSQL Migrations:** Fully ported database layer to remote PostgreSQL.
+- [x] **Row-Level Security (RLS) Policies:** Enabled and enforced 27 fine-grained security policies on Supabase.
+- [x] **Isolated Unit Testing:** Created a sandbox environment where tests run on local in-memory SQLite, keeping production database tables safe.
 
-### 🚀 Advanced Roadmap (Phase 4+)
-- [ ] **Automated PDF Parsing Visualizer**: An interactive drag-and-drop parser interface in the admin panel showing real-time bounding boxes of detected questions during PDF OCR extraction.
-- [ ] **JWT Auth Scope Access Control**: Integrating Supabase Auth metadata to allow multi-tenant organizations (coaching institutes, test centers) to upload proprietary papers with custom access scopes.
-- [ ] **Performance Calibration Engines**: Dynamic difficulty adjustment (DDA) engines that adapt mock simulator questions in real-time to match student strengths and weaknesses.
-- [ ] **Collaborative Learning Hub**: Group-based study planners where students studying for the same exam can share custom-curated question sets and notes.
-- [ ] **Deep Predictive Correlation Map**: Force-directed graphs showcasing latent topic pairings (e.g. if Topic A is highly tested in year X, Topic B is 78% likely to be tested in year X+1).
+### 🔮 Future (Phase 4 — Gamification & Advanced Analytics)
+- [ ] **Interactive XP Balance System:** Maintain a local storage XP balance where using the AI Mentor costs XP (-50 XP) and verifying correct answers gains XP (+10 XP).
+- [ ] **Collaborative Learning Hub:** Sharing custom-curated question sets and flashcards with other aspirants.
+- [ ] **Holdout Validation Backtesting Visualizer:** Visual scorecard evaluating prediction algorithms against actual historical exams.
 
 ---
 
-## 🤝 Contributing
+## 🤝 Contributing & Workflows
 
-### Branch Naming
-```
-feature/  — new features        (e.g., feature/topic-pairing-map)
-fix/      — bug fixes           (e.g., fix/unicode-search)
-refactor/ — code restructuring  (e.g., refactor/split-app-jsx)
-docs/     — documentation only  (e.g., docs/api-reference)
-```
+### Branch Naming Convention
+* `feature/` — new features (e.g. `feature/xp-balance-engine`)
+* `fix/` — bug fixes (e.g. `fix/globe-line-clipping`)
+* `refactor/` — code cleaning (e.g. `refactor/api-endpoints`)
+* `ci/` — pipeline changes (e.g. `ci/github-actions`)
 
-### Pull Request Process
-1. Fork the repository
-2. Create a feature branch from `main`
-3. Make your changes with descriptive commits
-4. Run `npm run build` in `frontend/` to verify no compilation errors
-5. Run the backend server and verify your changes work
-6. Submit a PR with a clear description of what changed and why
+### Pull Request & Review Workflow
+1. Fork the repository and create your feature branch.
+2. Ensure you run `npm run build` locally in `frontend/` to confirm Vite compiles cleanly.
+3. Verify backend tests pass with `pytest`.
+4. Submit a PR. The **GitHub Actions CI Pipeline** will automatically lint code, run backend tests, and test the frontend build.
+5. If the PR checks pass and review looks good, it can be merged after final approval.
 
 ---
 

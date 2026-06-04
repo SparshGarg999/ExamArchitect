@@ -97,10 +97,11 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
       color: 0x818cf8, transparent: true, opacity: 0.40,
     });
     const R = 100; // ThreeGlobe unit radius
+    const lineR = 100.8; // Floated radius to prevent z-fighting / clipping on bottom hemisphere
     // Latitude lines
     for (let lat = -75; lat <= 75; lat += 15) {
-      const r = Math.cos(lat * Math.PI / 180) * R;
-      const y = Math.sin(lat * Math.PI / 180) * R;
+      const r = Math.cos(lat * Math.PI / 180) * lineR;
+      const y = Math.sin(lat * Math.PI / 180) * lineR;
       const pts = [];
       for (let a = 0; a <= 360; a += 6)
         pts.push(new THREE.Vector3(r * Math.cos(a * Math.PI / 180), y, r * Math.sin(a * Math.PI / 180)));
@@ -113,9 +114,9 @@ export default function GithubGlobe({ width = 450, height = 450 }) {
         const phi = a * Math.PI / 180;
         const theta = lon * Math.PI / 180;
         pts.push(new THREE.Vector3(
-          Math.sin(phi) * Math.cos(theta) * R,
-          Math.cos(phi) * R,
-          Math.sin(phi) * Math.sin(theta) * R,
+          Math.sin(phi) * Math.cos(theta) * lineR,
+          Math.cos(phi) * lineR,
+          Math.sin(phi) * Math.sin(theta) * lineR,
         ));
       }
       globe.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));

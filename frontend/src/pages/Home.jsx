@@ -76,7 +76,7 @@ function FeatureCard({ icon: Icon, title, description, accent = 'indigo', large 
   };
   const a = accentMap[accent] || accentMap.indigo;
   return (
-    <div className={`group glass-panel p-6 flex flex-col gap-4 border border-white/5 transition-all duration-300 ${a.border} ${a.glow} ${large ? 'md:col-span-2' : ''}`}>
+    <div className={`group glass-panel p-6 flex flex-col gap-4 border border-white/5 transition-all duration-300 ${a.border} ${a.glow} ${large ? 'md:col-span-2' : ''} h-full`}>
       <div className={`w-11 h-11 rounded-xl ${a.badge} flex items-center justify-center shrink-0`}>
         <Icon size={22} className={a.icon} />
       </div>
@@ -160,8 +160,8 @@ export default function Home() {
 
   const FEATURES = [
     {
-      icon: BarChart3, accent: 'indigo', large: true,
-      title: 'Decadal Topic Heatmap',
+      icon: BarChart3, accent: 'indigo', large: false,
+      title: 'Topic Heatmap',
       description: 'Visualize 12+ years of historical paper data as a colour-coded heatmap. Instantly identify which subjects carry the most marks weight and never over-prepare for a low-yield topic again.',
     },
     {

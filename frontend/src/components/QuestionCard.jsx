@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Image, ChevronRight, Check, X, Bot, ZoomIn, ZoomOut } from 'lucide-react';
+import { API_BASE } from '../config';
 
 function parseOptions(text) {
   if (!text) return null;
@@ -232,11 +233,6 @@ export default function QuestionCard({
               {q.question_number}q
             </span>
           )}
-          {q.question_number && String(qNumber) === String(q.question_number) && (
-            <span className="text-xs px-2 py-0.5 bg-indigo-500/10 text-indigo-300 rounded font-semibold border border-indigo-500/20">
-              {q.question_number}q
-            </span>
-          )}
           {!selectedPaper && q.paper_year && (
             <span className="text-xs px-2 py-0.5 border border-white/10 rounded text-slate-300">
               {(q.exam_name ? q.exam_name.replace('-', ' ') : 'GATE CS')} {q.paper_year}
@@ -406,7 +402,7 @@ export default function QuestionCard({
                   onClick={() => setShowImageModal(true)}
                 >
                   <img
-                    src={`http://localhost:8000${q.diagram_path}`}
+                    src={`${API_BASE}${q.diagram_path}`}
                     alt={`Diagram for Q.${q.question_number}`}
                     className="max-h-[240px] max-w-full rounded-lg object-contain transition-transform group-hover:scale-[1.02]"
                     onError={(e) => {
@@ -551,7 +547,7 @@ export default function QuestionCard({
           <div className="w-full max-w-4xl flex-1 bg-black/40 border border-white/5 rounded-2xl overflow-hidden flex items-center justify-center p-6 min-h-[300px] relative">
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
               <img
-                src={`http://localhost:8000${q.diagram_path}`}
+                src={`${API_BASE}${q.diagram_path}`}
                 alt={`Diagram for Q.${q.question_number}`}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}

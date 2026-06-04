@@ -77,10 +77,10 @@ const DURATION_PROFILES = {
 };
 
 const accentColorMap = {
-  indigo: { primary: '#6366f1', glow: 'rgba(99, 102, 241, 0.25)', border: 'rgba(99, 102, 241, 0.6)', bg: 'rgba(99, 102, 241, 0.15)', text: 'text-indigo-400' },
-  emerald: { primary: '#10b981', glow: 'rgba(16, 185, 129, 0.25)', border: 'rgba(16, 185, 129, 0.6)', bg: 'rgba(16, 185, 129, 0.15)', text: 'text-emerald-400' },
-  amber: { primary: '#f59e0b', glow: 'rgba(245, 158, 11, 0.25)', border: 'rgba(245, 158, 11, 0.6)', bg: 'rgba(245, 158, 11, 0.15)', text: 'text-amber-400' },
-  rose: { primary: '#f43f5e', glow: 'rgba(244, 63, 94, 0.25)', border: 'rgba(244, 63, 94, 0.6)', bg: 'rgba(244, 63, 94, 0.15)', text: 'text-rose-400' },
+  indigo: { primary: '#6366f1', rgb: '99, 102, 241', lightText: '#a5b4fc', mediumText: '#e0e7ff', glow: 'rgba(99, 102, 241, 0.25)', border: 'rgba(99, 102, 241, 0.6)', bg: 'rgba(99, 102, 241, 0.15)', text: 'text-indigo-400' },
+  emerald: { primary: '#10b981', rgb: '16, 185, 129', lightText: '#6ee7b7', mediumText: '#d1fae5', glow: 'rgba(16, 185, 129, 0.25)', border: 'rgba(16, 185, 129, 0.6)', bg: 'rgba(16, 185, 129, 0.15)', text: 'text-emerald-400' },
+  amber: { primary: '#f59e0b', rgb: '245, 158, 11', lightText: '#fcd34d', mediumText: '#fef3c7', glow: 'rgba(245, 158, 11, 0.25)', border: 'rgba(245, 158, 11, 0.6)', bg: 'rgba(245, 158, 11, 0.15)', text: 'text-amber-400' },
+  rose: { primary: '#f43f5e', rgb: '244, 63, 94', lightText: '#fda4af', mediumText: '#ffe4e6', glow: 'rgba(244, 63, 94, 0.25)', border: 'rgba(244, 63, 94, 0.6)', bg: 'rgba(244, 63, 94, 0.15)', text: 'text-rose-400' },
 };
 
 function QuestionFeedback({ questionId }) {
@@ -232,7 +232,7 @@ export default function Dashboard({ addToast }) {
 
   // Predictions pagination states
   const [predCurrentPage, setPredCurrentPage] = useState(1);
-  const predsPerPage = 10;
+  const predsPerPage = 6;
 
   // Tagging corner toast popup state
   const [weaknessPopup, setWeaknessPopup] = useState({ show: false, topic: '', action: 'added' });
@@ -489,9 +489,12 @@ export default function Dashboard({ addToast }) {
 
   const renderHeatmapCell = (marks, questions, avgDifficulty, topic, year, key, tooltipBelow = false, dynamicThresholds = null) => {
     const topicName = topic?.name || 'Topic';
+    const theme = accentColorMap[themeAccent] || accentColorMap.indigo;
+    
     let bgIntensity = 'rgba(255,255,255,0.02)';
     let textColor = '#64748b';
-    let borderStyle = 'border-white/5';
+    let borderColorVal = 'rgba(255,255,255,0.05)';
+    let cellShadow = '';
 
     // Use dynamic thresholds when provided (per-exam), fall back to GATE defaults
     const lowMax      = dynamicThresholds?.low      ?? 3;
@@ -500,20 +503,21 @@ export default function Dashboard({ addToast }) {
 
     if (marks > 0) {
       if (marks <= lowMax) {
-        // Low Weight — subtle indigo
-        bgIntensity = `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(129, 140, 248, 0.15))`;
-        textColor = '#a5b4fc';
-        borderStyle = 'border-indigo-500/20';
+        // Low Weight — subtle theme accent
+        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.12), rgba(${theme.rgb}, 0.22))`;
+        textColor = theme.lightText;
+        borderColorVal = `rgba(${theme.rgb}, 0.25)`;
       } else if (marks <= medMax) {
-        // Medium Weight — purple
-        bgIntensity = `linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(139, 92, 246, 0.4))`;
-        textColor = '#e9d5ff';
-        borderStyle = 'border-purple-500/30';
+        // Medium Weight — medium theme accent
+        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.45), rgba(${theme.rgb}, 0.55))`;
+        textColor = theme.mediumText;
+        borderColorVal = `rgba(${theme.rgb}, 0.5)`;
       } else {
-        // Critical Weight — rose/red
-        bgIntensity = `linear-gradient(135deg, rgba(244, 63, 94, 0.8), rgba(236, 72, 153, 0.85))`;
+        // Critical Weight — strong theme accent
+        bgIntensity = `linear-gradient(135deg, rgba(${theme.rgb}, 0.85), rgba(${theme.rgb}, 0.95))`;
         textColor = '#ffffff';
-        borderStyle = 'border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.2)]';
+        borderColorVal = `rgba(${theme.rgb}, 0.9)`;
+        cellShadow = `0 0 12px rgba(${theme.rgb}, 0.45)`;
       }
     }
 
@@ -543,8 +547,8 @@ export default function Dashboard({ addToast }) {
       if (marks > 0) {
         cellContent = (
           <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
-            <span className="text-[10px] font-black text-white leading-none">{Number(marks.toFixed(1))}m</span>
-            <span className="text-[8px] font-bold text-slate-400 leading-none">{questions}q</span>
+            <span className="text-[10px] font-black leading-none" style={{ color: textColor }}>{Number(marks.toFixed(1))}m</span>
+            <span className="text-[8px] font-bold text-slate-400/80 leading-none">{questions}q</span>
           </div>
         );
       } else {
@@ -555,12 +559,12 @@ export default function Dashboard({ addToast }) {
     return (
       <div 
         key={key} 
-        style={{ background: bgIntensity }} 
+        style={{ background: bgIntensity, borderColor: borderColorVal, boxShadow: cellShadow }} 
         onClick={(e) => {
           e.stopPropagation();
           setSelectedHeatmapTopic(topic);
         }}
-        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border ${borderStyle} transition-all hover:scale-[1.05] hover:border-white/30 hover:z-[60] relative group cursor-pointer ${marks > medMax ? 'shadow-md shadow-rose-950/20 animate-pulse-slow' : ''}`}
+        className={`py-2 px-1 rounded-md font-bold text-center text-[9px] leading-tight border transition-all hover:scale-[1.05] hover:border-white/30 hover:z-[60] relative group cursor-pointer ${marks > medMax ? 'animate-pulse-slow' : ''}`}
       >
         {cellContent}
         
@@ -770,7 +774,7 @@ export default function Dashboard({ addToast }) {
           <div className="glass-panel p-6 bg-[#121420]/60">
             <div className="flex flex-wrap justify-between items-center gap-6 mb-6">
               <div>
-                <h3 className="text-xl font-bold">Decadal Topic Heatmap</h3>
+                <h3 className="text-xl font-bold">Topic Heatmap</h3>
                 <p className="text-sm text-slate-400 mt-1">Click a subject parent row to drill down into subtopic weight distributions over the last 10 years.</p>
               </div>
 
@@ -1210,11 +1214,14 @@ export default function Dashboard({ addToast }) {
 
                           <div className="bg-[#191c2c]/45 border border-white/5 p-4 rounded-2xl flex flex-col justify-between animate-fade-in-up hover-premium-lift transition-all relative overflow-hidden">
                             {selectedHeatmapTopic && (
-                              <div className="absolute -right-2 -bottom-2 w-10 h-10 rounded-full filter blur-[15px] opacity-20 bg-rose-500 animate-pulse"></div>
+                              <div 
+                                className="absolute -right-2 -bottom-2 w-10 h-10 rounded-full filter blur-[15px] opacity-15"
+                                style={{ backgroundColor: accentColorMap[themeAccent].primary }}
+                              />
                             )}
                             <div className="flex justify-between items-start">
                               <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">{dynamicFocusLabel}</span>
-                              <Target size={16} className="text-rose-450 animate-pulse" />
+                              <Target size={16} style={{ color: accentColorMap[themeAccent].primary }} />
                             </div>
                             <div className="mt-2">
                               <strong className="text-sm font-black text-white truncate max-w-[220px] block" title={dynamicFocusName}>
@@ -2189,12 +2196,12 @@ export default function Dashboard({ addToast }) {
             {questions.length === 0 ? (
               <p className="text-center text-slate-400 py-10 font-semibold">No questions found matching your filter rules.</p>
             ) : (
-              questions.slice((currentPage - 1) * questionsPerPage, currentPage * questionsPerPage).map((q) => (
+              questions.slice((currentPage - 1) * questionsPerPage, currentPage * questionsPerPage).map((q, idx) => (
                 <div key={q.id}>
                   <QuestionCard 
                     q={q} 
                     selectedPaper={selectedPaper}
-                    qNumber={q.question_number}
+                    qNumber={(currentPage - 1) * questionsPerPage + idx + 1}
                     onAskMentor={handleAskMentor}
                   />
                   <div className="px-5 pb-5 -mt-3">
