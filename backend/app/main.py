@@ -872,7 +872,7 @@ def ai_mentor_explain(req: MentorRequest):
     Uses Gemini API to generate a step-by-step explanation for a question.
     Provides hints, solution walkthrough, and concept clarification.
     """
-    import google.generativeai as genai
+    from google import genai
     api_key = os.getenv("GEMINI_API_KEY")
 
     if not api_key:
@@ -882,8 +882,7 @@ def ai_mentor_explain(req: MentorRequest):
             "xp_earned": 0
         }
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    client = genai.Client(api_key=api_key)
 
     prompt = f"""You are the ExamArchitect AI Mentor — a friendly, expert GATE CS tutor.
 
@@ -911,7 +910,10 @@ Provide a clear, structured response with:
 Format using markdown. Be encouraging and clear. Keep total response under 400 words."""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt
+        )
         explanation = response.text.strip()
 
         # Extract tips from the explanation

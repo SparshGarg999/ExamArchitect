@@ -37,7 +37,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import fitz  # PyMuPDF
 from PIL import Image
 
-import google.generativeai as genai
+from google import genai
 
 from app.database import SessionLocal
 from app.models import Exam, Paper, Question, Topic, TopicYearStat
@@ -284,7 +284,7 @@ def repair_json_backslashes(raw_json: str) -> str:
     return re.sub(pattern, r'\\\\', raw_json)
 
 
-def extract_questions_from_page(model, page_image_path: Path) -> list:
+def extract_questions_from_page(client, page_image_path: Path) -> list:
     """Send one page image to Gemini and return list of extracted question dicts."""
     if not page_image_path.exists():
         print(f"  [WARN] Image not found: {page_image_path}")
@@ -292,7 +292,10 @@ def extract_questions_from_page(model, page_image_path: Path) -> list:
 
     try:
         img = Image.open(page_image_path)
-        response = model.generate_content([EXTRACTION_PROMPT, img])
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=[EXTRACTION_PROMPT, img]
+        )
 
         # Check for finish reason indicating copyright block
         if hasattr(response, "candidates") and response.candidates:
@@ -396,8 +399,7 @@ def main():
         print("ERROR: GEMINI_API_KEY not set. Add it to backend/.env")
         sys.exit(1)
 
-    genai.configure(api_key=api_key)
-    client = genai.GenerativeModel(GEMINI_MODEL)
+    client = genai.Client(api_key=api_key)
     print(f"Gemini model: {GEMINI_MODEL}")
 
     # ── DB: find GATE-CS 2011 paper ─────────────────────────────────────────
